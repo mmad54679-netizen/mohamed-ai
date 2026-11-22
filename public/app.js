@@ -17,6 +17,8 @@ const DEFAULT_WORKER_URL = 'https://qureo-helper.qureo-helper.workers.dev';
 const ASSISTANT_MODE_KEY = 'mohamedAiAssistantMode';
 const REMEMBER_CHAT_KEY = 'mohamedAiRememberChat';
 const CHAT_MEMORY_KEY = 'mohamedAiChatMemory';
+const RESPONSE_STYLE_KEY = 'mohamedAiResponseStyle';
+let responseStyle = localStorage.getItem(RESPONSE_STYLE_KEY) || 'balanced';
 let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
 const ANDROID_NATIVE = new URLSearchParams(window.location.search).get('native') === '1';
 let imageData = '';
@@ -43,6 +45,10 @@ function applyAssistantMode() {
 modeInputs.forEach(input => input.addEventListener('change', () => { assistantMode = input.value; localStorage.setItem(ASSISTANT_MODE_KEY, assistantMode); applyAssistantMode(); }));
 applyAssistantMode();
 $('clearPassword').addEventListener('click', () => { $('appPassword').value = ''; });
+const responseStyleInput = $('responseStyle');
+if (!['balanced', 'concise', 'detailed', 'steps'].includes(responseStyle)) responseStyle = 'balanced';
+responseStyleInput.value = responseStyle;
+responseStyleInput.addEventListener('change', () => { responseStyle = responseStyleInput.value; localStorage.setItem(RESPONSE_STYLE_KEY, responseStyle); });
 const rememberChatToggle = $('rememberChatToggle');
 rememberChatToggle.checked = localStorage.getItem(REMEMBER_CHAT_KEY) === 'yes';
 rememberChatToggle.addEventListener('change', () => {
@@ -423,7 +429,7 @@ async function runTask(task) {
       response = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode }),
+        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode, responseStyle }),
         signal: controller.signal,
       });
     } finally { clearTimeout(timer); }

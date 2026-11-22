@@ -442,6 +442,13 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         const question = String(body.question || '').trim();
         const image = typeof body.image === 'string' ? body.image : '';
         const mode = body.mode === 'qureo' ? 'qureo' : 'general';
+        const responseStyle = ['balanced', 'concise', 'detailed', 'steps'].includes(body.responseStyle) ? body.responseStyle : 'balanced';
+        const styleInstruction = {
+          balanced: 'اكتب إجابة متوازنة وواضحة دون إطالة غير لازمة.',
+          concise: 'اكتب إجابة مختصرة ومباشرة، واذكر الضروري فقط.',
+          detailed: 'اكتب شرحًا مفصلًا وعميقًا مع الأمثلة والتحذيرات المهمة.',
+          steps: 'نظّم الإجابة في خطوات مرقمة قابلة للتنفيذ.'
+        }[responseStyle];
         if (!question && !image) return sendApi(400, { error: 'اكتب السؤال أو أرفق صورة له.' });
         if (question.length > 12000) return sendApi(413, { error: 'نص السؤال طويل جدًا؛ اختصره ثم أعد المحاولة.' });
         imageParts(image);
@@ -462,10 +469,11 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         const failures = [];
         for (const provider of providers) {
           try {
-            const answer = await provider.run({ question, image, systemPrompt: mode === 'qureo' ? SYSTEM_PROMPT : GENERAL_SYSTEM_PROMPT });
+            const answer = await provider.run({ question, image, systemPrompt: `${mode === 'qureo' ? SYSTEM_PROMPT : GENERAL_SYSTEM_PROMPT}\n\nأسلوب الرد المطلوب: ${styleInstruction}` });
             return sendApi(200, {
               answer,
               mode,
+              responseStyle,
               provider: provider.name,
               model: provider.model,
               fallbackUsed: failures.length > 0,
