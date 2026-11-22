@@ -443,6 +443,10 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         const image = typeof body.image === 'string' ? body.image : '';
         const mode = body.mode === 'qureo' ? 'qureo' : 'general';
         const responseStyle = ['balanced', 'concise', 'detailed', 'steps'].includes(body.responseStyle) ? body.responseStyle : 'balanced';
+        const taskMode = body.taskMode === 'task' ? 'task' : 'chat';
+        const taskInstruction = taskMode === 'task'
+          ? 'تعامل مع الطلب كمهمة: حدّد الهدف، ثم اكتب خطة قصيرة مرقمة، ثم نفّذ ما يمكن داخل الرد، واذكر ما يحتاج موافقة أو معلومات من المستخدم. لا تدّعِ تنفيذ خطوة خارجية لم تنفذها.'
+          : 'تعامل مع الطلب كمحادثة: أجب مباشرة، ولا تحوّل كل سؤال بسيط إلى خطة طويلة.';
         const styleInstruction = {
           balanced: 'اكتب إجابة متوازنة وواضحة دون إطالة غير لازمة.',
           concise: 'اكتب إجابة مختصرة ومباشرة، واذكر الضروري فقط.',
@@ -469,11 +473,12 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         const failures = [];
         for (const provider of providers) {
           try {
-            const answer = await provider.run({ question, image, systemPrompt: `${mode === 'qureo' ? SYSTEM_PROMPT : GENERAL_SYSTEM_PROMPT}\n\nأسلوب الرد المطلوب: ${styleInstruction}` });
+            const answer = await provider.run({ question, image, systemPrompt: `${mode === 'qureo' ? SYSTEM_PROMPT : GENERAL_SYSTEM_PROMPT}\n\nطريقة المساعدة: ${taskInstruction}\nأسلوب الرد المطلوب: ${styleInstruction}` });
             return sendApi(200, {
               answer,
               mode,
               responseStyle,
+              taskMode,
               provider: provider.name,
               model: provider.model,
               fallbackUsed: failures.length > 0,
