@@ -1,0 +1,16 @@
+# Mohamed AI connectors
+
+Mohamed AI uses an allowlisted connector registry. A connector is not considered connected until its server-side credential is configured and its health check succeeds.
+
+## Planned and supported boundaries
+
+- **GitHub**: read-only repository metadata and source files by default.
+- **Google Drive / PDF / Word**: read-only file listing and download/export; parsing happens in the server sandbox.
+- **Gmail**: read-only mail search first. Sending mail requires a separate explicit approval and is never enabled by a token alone.
+- **Google Calendar**: read-only event lookup first. Creating or editing events requires explicit confirmation.
+- **Web search**: read-only research results with source URLs; no claim of live browsing when the provider is not configured.
+- **Microphone and speech**: browser permission only; audio stays local unless the user submits it for transcription.
+
+Never put OAuth access tokens, API keys, or passwords in the Android app or Git repository. Configure them on the private server and expose only the minimum connector scopes. Permanent deletion is not a supported agent action; destructive operations must be replaced with trash/archive and explicit confirmation.
+
+The registry reports availability only. It does not grant permission to send, delete, purchase, publish, or modify external data.

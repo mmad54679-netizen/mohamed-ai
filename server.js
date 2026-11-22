@@ -1,4 +1,5 @@
 const http = require('node:http');
+const { connectorStatus } = require('./connectors/registry.js');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -474,6 +475,13 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         passwordRequired: Boolean(appPassword),
         providers: { gemini: providers.some(p => p.name === 'gemini'), groq: providers.some(p => p.name === 'groq') },
       });
+    }
+
+    if (url.pathname === '/api/capabilities' && req.method === 'GET') {
+      if (appPassword && req.headers.authorization !== `Bearer ${appPassword}`) {
+        return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      }
+      return sendApi(200, { connectors: connectorStatus(env), note: 'التوفر لا يعني منح صلاحية التنفيذ.' });
     }
 
     if (url.pathname === '/api/solve' && req.method === 'POST') {

@@ -58,3 +58,7 @@ ANDROID_HOME=/home/ubuntu/Android/Sdk ./gradlew testDebugUnitTest assembleDebug
 ```
 
 هذه نسخة Debug لحزمة `com.cue.qureohelper`، الإصدار `1.4.1` (versionCode 9)، بحد أدنى Android API 24 وtarget API 35، وليست نسخة متجر.
+
+## التكاملات
+
+طبقة التكاملات موثقة في `CONNECTORS.md`، وتعرض `/api/capabilities` حالة GitHub وGoogle Drive وGmail وCalendar والبحث والصوت دون كشف الأسرار. التوفر لا يمنح الوكيل صلاحية الإرسال أو الحذف أو التعديل.
