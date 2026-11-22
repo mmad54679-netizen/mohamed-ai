@@ -443,10 +443,12 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         const image = typeof body.image === 'string' ? body.image : '';
         const mode = body.mode === 'qureo' ? 'qureo' : 'general';
         const responseStyle = ['balanced', 'concise', 'detailed', 'steps'].includes(body.responseStyle) ? body.responseStyle : 'balanced';
-        const taskMode = body.taskMode === 'task' ? 'task' : 'chat';
-        const taskInstruction = taskMode === 'task'
-          ? 'تعامل مع الطلب كمهمة: حدّد الهدف، ثم اكتب خطة قصيرة مرقمة، ثم نفّذ ما يمكن داخل الرد، واذكر ما يحتاج موافقة أو معلومات من المستخدم. لا تدّعِ تنفيذ خطوة خارجية لم تنفذها.'
-          : 'تعامل مع الطلب كمحادثة: أجب مباشرة، ولا تحوّل كل سؤال بسيط إلى خطة طويلة.';
+        const taskMode = ['task', 'agent'].includes(body.taskMode) ? body.taskMode : 'chat';
+        const taskInstruction = taskMode === 'agent'
+          ? 'أنت وكيل ذكي آمن: افهم الهدف، لخّصه، ضع خطة قصيرة، ثم ميّز بوضوح بين ما تستطيع فعله داخل الرد وما يحتاج أداة أو موافقة. لا تنفذ أو تدّعي تنفيذ رسائل أو عمليات شراء أو حذف أو نشر أو تغيير حسابات دون موافقة صريحة. لا تخترع نتائج أدوات؛ إذا لم تتوفر أداة قل ذلك.'
+          : taskMode === 'task'
+            ? 'تعامل مع الطلب كمهمة: حدّد الهدف، ثم اكتب خطة قصيرة مرقمة، ثم نفّذ ما يمكن داخل الرد، واذكر ما يحتاج موافقة أو معلومات من المستخدم. لا تدّعِ تنفيذ خطوة خارجية لم تنفذها.'
+            : 'تعامل مع الطلب كمحادثة: أجب مباشرة، ولا تحوّل كل سؤال بسيط إلى خطة طويلة.';
         const styleInstruction = {
           balanced: 'اكتب إجابة متوازنة وواضحة دون إطالة غير لازمة.',
           concise: 'اكتب إجابة مختصرة ومباشرة، واذكر الضروري فقط.',
@@ -479,6 +481,7 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
               mode,
               responseStyle,
               taskMode,
+              agentEnabled: taskMode === 'agent',
               provider: provider.name,
               model: provider.model,
               fallbackUsed: failures.length > 0,

@@ -20,7 +20,7 @@ const CHAT_MEMORY_KEY = 'mohamedAiChatMemory';
 const RESPONSE_STYLE_KEY = 'mohamedAiResponseStyle';
 const FEEDBACK_KEY = 'mohamedAiFeedback';
 const TASK_MODE_KEY = 'mohamedAiTaskMode';
-let taskMode = localStorage.getItem(TASK_MODE_KEY) === 'task' ? 'task' : 'chat';
+let taskMode = ['task', 'agent'].includes(localStorage.getItem(TASK_MODE_KEY)) ? localStorage.getItem(TASK_MODE_KEY) : 'chat';
 let responseStyle = localStorage.getItem(RESPONSE_STYLE_KEY) || 'balanced';
 let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
 const ANDROID_NATIVE = new URLSearchParams(window.location.search).get('native') === '1';
