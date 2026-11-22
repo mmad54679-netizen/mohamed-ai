@@ -1,0 +1,13 @@
+{
+  "name": "مساعد QUREO",
+  "short_name": "QUREO Helper",
+  "description": "مساعد عربي لشرح أسئلة QUREO",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#2459d3",
+  "icons": []
+}

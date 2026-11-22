@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2459d3">
+  <meta name="description" content="مساعد محادثة عربي لحل أسئلة QUREO فقط">
+  <link rel="manifest" href="./manifest.json">
+  <title>مساعد QUREO</title>
+  <style>
+    :root{color-scheme:light;--ink:#17233d;--muted:#69758b;--blue:#2459d3;--blue-dark:#1949bd;--blue-soft:#edf3ff;--line:#e2e7f0;--paper:#fff;--bg:#f4f6fb;--green:#167453;--red:#ad3c3c;--shadow:0 12px 36px rgba(26,44,83,.08)}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;line-height:1.65}
+    button,textarea,input{font:inherit}
+    .wrap{max-width:720px;margin:0 auto;padding:14px 14px 42px}
+    header{display:flex;align-items:center;gap:11px;padding:8px 3px 16px}
+    .mark{width:44px;height:44px;flex:0 0 44px;border-radius:15px;background:linear-gradient(140deg,#2459d3,#6793ff);display:grid;place-items:center;color:#fff;font-size:23px;font-weight:850;box-shadow:0 7px 18px #2459d344}
+    h1{font-size:20px;line-height:1.2;margin:0 0 4px;letter-spacing:-.3px}
+    .subtitle{font-size:12px;color:var(--muted);margin:0}
+    .pill{margin-inline-start:auto;white-space:nowrap;padding:5px 9px;border-radius:99px;background:#e8f5ef;color:var(--green);font-size:11px;font-weight:750}
+    .install{display:none;margin-inline-start:auto;background:#fff;border:1px solid #d8e2f6;color:#3157a1;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700}
+    .card{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+    .intro{display:flex;align-items:flex-start;gap:12px;background:linear-gradient(130deg,#edf3ff,#fff 76%);border-color:#dce7ff;padding:17px}
+    .intro-icon{width:37px;height:37px;flex:0 0 37px;border-radius:13px;background:#2459d3;color:#fff;display:grid;place-items:center;font-size:18px;font-weight:800}
+    .intro strong{display:block;font-size:15px;margin:0 0 4px}
+    .intro p{font-size:13px;color:#4f5f7b;margin:0}
+    .intro .limit{display:inline-block;margin-top:8px;color:#3157a1;background:#fff;border:1px solid #dce7ff;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:700}
+    .section-head{display:flex;align-items:center;gap:9px;margin:0 0 11px}
+    .step{width:26px;height:26px;border-radius:9px;background:#edf3ff;color:#2459d3;display:grid;place-items:center;font-weight:800;font-size:12px}
+    .section-head strong{font-size:15px}
+    .label{font-weight:750;font-size:13px;display:block;margin:11px 0 6px}
+    input[type=text],input[type=password],input[type=url]{width:100%;border:1px solid #d8dfeb;border-radius:12px;padding:11px 12px;outline:none;background:#fff;color:var(--ink);min-height:46px}
+    input:focus,textarea:focus{border-color:#7296ed;box-shadow:0 0 0 3px #2459d31c}
+    .track-options{display:flex;gap:9px;margin:8px 0 12px}
+    .track-option{flex:1;border:1px solid #d8dfeb;border-radius:12px;padding:9px 11px;background:#fff;display:flex;align-items:center;gap:8px;font-weight:750;min-height:45px}
+    .track-option:has(input:checked){border-color:#2459d3;background:#edf3ff;color:#234b9c}
+    .track-option input{accent-color:#2459d3}
+    .primary{width:100%;margin-top:13px;border:0;border-radius:14px;background:var(--blue);color:white;min-height:52px;padding:12px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 18px #2459d333}
+    .primary:disabled{opacity:.6;cursor:wait;box-shadow:none}
+    .primary:active{transform:translateY(1px)}
+    .auto-card{display:none;border-color:#d2e0ff;background:linear-gradient(145deg,#f6f8ff,#fff 76%)}
+    .auto-note{font-size:12px;color:#52627d;margin:5px 0 0}
+    .cache-toggle{display:flex;align-items:flex-start;gap:8px;margin:11px 0 1px;font-size:12px;font-weight:650;line-height:1.55}
+    .cache-toggle input{margin-top:5px;accent-color:#2459d3}
+    .connection-hint{margin:11px 0 0;padding:10px 11px;border-radius:12px;background:#f7f9fd;border:1px solid #e6ebf3;color:#5c6a82;font-size:11px;line-height:1.6}
+    details.advanced{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+    details.advanced summary,details.local-details summary{cursor:pointer;color:#3f5275;font-size:12px;font-weight:750;list-style:none}
+    details.advanced summary::-webkit-details-marker,details.local-details summary::-webkit-details-marker{display:none}
+    details.advanced summary:after,details.local-details summary:after{content:"＋";float:left;color:#5574b0}
+    details.advanced[open] summary:after,details.local-details[open] summary:after{content:"−"}
+    .server-box{display:none;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+    .server-box input{direction:ltr;text-align:left}
+    .password-box{margin-top:11px;padding-top:10px;border-top:1px solid var(--line)}
+    .password-row{display:flex;gap:8px}
+    .password-row input{min-width:0}
+    .small-btn{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 12px;white-space:nowrap;cursor:pointer;color:#42516b;font-weight:650}
+    .password-hint,.note{font-size:11px;color:var(--muted);margin:7px 1px 0;line-height:1.55}
+    .status{min-height:20px;margin:7px 2px 0;font-size:12px;color:var(--muted)}
+    .status.error{color:var(--red)}
+    .chat-card{padding:0;overflow:hidden}
+    .chat-heading{padding:15px 16px 11px;border-bottom:1px solid #edf0f5;display:flex;align-items:center;gap:9px}
+    .chat-heading strong{font-size:15px}
+    .chat-heading span{margin-inline-start:auto;color:#71809a;font-size:11px}
+    .chat-log{padding:14px 13px 7px;display:flex;flex-direction:column;gap:11px;min-height:140px;max-height:48vh;overflow-y:auto;overscroll-behavior:contain;background:linear-gradient(#fbfcff,#f9fbff)}
+    .bubble{max-width:91%;padding:11px 13px;border-radius:16px;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 3px 10px rgba(28,50,93,.04)}
+    .bubble.assistant{align-self:flex-start;border:1px solid #e4eaf5;background:#fff;border-start-start-radius:5px;color:#263650}
+    .bubble.user{align-self:flex-end;border:1px solid #d7e4ff;background:#eaf1ff;border-start-end-radius:5px;color:#203b72}
+    .bubble-label{display:block;font-size:10px;font-weight:800;color:#5874ad;margin-bottom:3px}
+    .composer{padding:12px;border-top:1px solid #edf0f5;background:#fff}
+    textarea{width:100%;min-height:82px;max-height:190px;border:1px solid #d8dfeb;border-radius:14px;padding:11px 12px;resize:vertical;outline:none;color:var(--ink);background:#fff;line-height:1.65;font-size:14px}
+    textarea::placeholder{color:#98a2b4}
+    .composer-bottom{display:flex;align-items:center;gap:8px;margin-top:9px}
+    .upload{border:1px dashed #9bb1dc;background:#f8faff;color:#35558f;border-radius:11px;min-height:42px;padding:7px 11px;display:flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:750;cursor:pointer}
+    .upload:active{background:#eef3ff}
+    .upload span:first-child{font-size:17px}
+    input[type=file]{display:none}
+    .send-btn{margin-inline-start:auto;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:9px 15px;min-height:42px;font-weight:800;cursor:pointer}
+    .send-btn:disabled{opacity:.55;cursor:wait}
+    .preview-wrap{display:none;position:relative;margin-top:10px}
+    .preview{max-width:100%;max-height:220px;display:block;margin:auto;border:1px solid var(--line);border-radius:12px;object-fit:contain;background:#f7f8fb}
+    .remove{position:absolute;top:8px;inset-inline-start:8px;border:0;border-radius:99px;background:#17233dcc;color:#fff;width:30px;height:30px;cursor:pointer;font-size:17px}
+    .answer-card{display:none}
+    #chatTranscript .answer-card{display:block;width:min(94%,560px);margin:0 0 0 auto;padding:12px 13px;border:1px solid #dce7ff;border-radius:16px;border-start-start-radius:5px;background:#fff;box-shadow:0 3px 10px rgba(28,50,93,.04)}
+    .answer-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+    .answer-title{font-weight:800;font-size:12px;margin:0;color:#3157a1}
+    .answer-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;color:#263650;line-height:1.7}
+    .answer-tools{display:flex;gap:6px}
+    .answer-tools button{border:1px solid #dce3ef;background:#fff;border-radius:9px;padding:5px 8px;cursor:pointer;font-size:10px;font-weight:650;color:#43516a}
+    .answer-source{font-size:10px;color:#77839a;margin:7px 0 0}
+    .status-line{padding:10px 14px 13px;font-size:11px;color:var(--muted);background:#fff}
+    .local-card{padding:0;overflow:hidden}
+    details.local-details{padding:14px 16px}
+    .local-details-content{padding-top:10px}
+    .local-card strong{font-size:14px}
+    .local-card p{font-size:12px;color:#52627d;margin:6px 0}
+    .secondary{width:100%;border:1px solid #c9d7f3;background:#fff;color:#284b91;border-radius:12px;padding:10px 12px;font-weight:750;cursor:pointer}
+    .secondary:disabled{opacity:.55;cursor:not-allowed}
+    .saved-task{display:none;margin-top:11px;padding:11px;border:1px solid #dfe6f2;border-radius:12px;background:#fff}
+    .saved-actions{display:flex;gap:8px;margin-top:9px}
+    .saved-actions button{flex:1}
+    .tools-card{display:none}
+    .cache-tools{display:flex;gap:8px;margin-top:9px}
+    .cache-tools button{flex:1}
+    .disclaimer{font-size:11px;color:#68748a;margin:8px 2px 0;line-height:1.55}
+    footer{text-align:center;color:#929bad;font-size:10px;padding:4px 10px;line-height:1.6}
+    @media(min-width:600px){.wrap{padding-top:28px}.card{padding:19px}.chat-card{padding:0}.chat-log{min-height:190px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="mark" aria-hidden="true">Q</div>
+      <div>
+        <h1>مساعد QUREO</h1>
+        <p class="subtitle">محادثة عربية لحل أسئلة QUREO فقط</p>
+      </div>
+      <button class="install" id="installBtn" type="button">تثبيت</button>
+      <span class="pill">QUREO فقط</span>
+    </header>
+
+    <section class="card intro">
+      <div class="intro-icon" aria-hidden="true">Q</div>
+      <div>
+        <strong>أهلًا، أنا مساعدك لحل QUREO بس.</strong>
+        <p>اختار JavaScript أو Python وسجّل دخولك؛ أفتح صفحة QUREO وأفحص السؤال. التشغيل الآلي محدود بأنواع وأسئلة وأزرار مدعومة، ومش مضمون لكل الدروس. لو وقفت عند سؤال، كمل معايا هنا بالعربي.</p>
+        <span class="limit">ما بخمّنش — لو السؤال ملتبس أقولك</span>
+      </div>
+    </section>
+
+    <section class="card auto-card" id="qureoAutoCard" aria-labelledby="autoHeading">
+      <div class="section-head">
+        <span class="step" aria-hidden="true">١</span>
+        <strong id="autoHeading">اربط حساب QUREO وابدأ الحل</strong>
+      </div>
+      <p class="auto-note">بيانات الحساب تُستخدم لتسجيل الدخول إلى QUREO فقط، ولا تُرسل لمزوّد الذكاء الاصطناعي.</p>
+      <label class="label" for="qureoUsername">اسم المستخدم أو كود الطالب</label>
+      <input id="qureoUsername" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="اسم المستخدم في QUREO">
+      <label class="label" for="qureoPassword">كلمة مرور QUREO</label>
+      <input id="qureoPassword" type="password" autocomplete="current-password" placeholder="كلمة المرور في QUREO">
+      <span class="label">المسار</span>
+      <div class="track-options" role="radiogroup" aria-label="مسار البرمجة">
+        <label class="track-option"><input type="radio" name="qureoTrack" value="JavaScript" checked> JavaScript</label>
+        <label class="track-option"><input type="radio" name="qureoTrack" value="Python"> Python</label>
+      </div>
+      <button class="primary" id="startQureoAutoBtn" type="button">افتح QUREO وابدأ الحل</button>
+      <label class="cache-toggle"><input id="useSolutionLibrary" type="checkbox" checked> استخدم الحلول المؤكدة المحفوظة على هذا الجهاز، لكن عند التطابق التام للمسار والسؤال فقط.</label>
+      <p class="connection-hint">ملاحظة: بيانات QUREO تكفي للدخول. لحل أسئلة جديدة آليًا، يلزم أيضًا تهيئة خادم المساعد وكلمة مروره من إعداد الاتصال أدناه؛ من دون ذلك يظل الدخول متاحًا وقد تعمل الحلول المحفوظة المطابقة فقط.</p>
+      <details class="advanced" id="assistantConnectionDetails">
+        <summary>إعداد اتصال المساعد السحابي</summary>
+        <div class="server-box" id="serverBox">
+          <label class="label" for="serverBaseUrl">عنوان خادم المساعد الخاص (HTTPS)</label>
+          <input id="serverBaseUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://your-private-server.example">
+          <p class="password-hint">لا تضع مفتاح API هنا؛ عنوان الخادم وحده لا يكفي لتفعيل المساعدة السحابية.</p>
+        </div>
+        <div class="password-box" id="appPasswordBox">
+          <label class="label" for="appPassword">كلمة مرور خادم المساعد</label>
+          <div class="password-row">
+            <input id="appPassword" type="password" autocomplete="current-password" placeholder="كلمة مرور الخادم">
+            <button class="small-btn" type="button" id="clearPassword">مسح</button>
+          </div>
+          <p class="password-hint">تُستخدم مؤقتًا للفحص والطلب، ولا تُحفظ في هذا التطبيق. لا تضع هنا مفتاح API الخاص بمزوّد النموذج.</p>
+        </div>
+      </details>
+      <p class="status" id="autoStatus" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card tools-card" id="solutionLibraryCard" aria-labelledby="solutionLibraryHeading">
+      <details class="advanced">
+        <summary id="solutionLibraryHeading">مكتبة الحلول على هذا الجهاز</summary>
+        <p class="auto-note" id="solutionLibraryCount">الحلول لا تُربط باسم حساب ولا تُرفع إلى الخادم. يُعاد استخدام الحل فقط عند تطابق بصمة السؤال والمسار تمامًا.</p>
+        <div class="cache-tools">
+          <button class="secondary" id="refreshSolutionCountBtn" type="button">تحديث العدد</button>
+          <button class="small-btn" id="clearSolutionLibraryBtn" type="button">مسح المكتبة</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="card chat-card" aria-labelledby="chatHeading">
+      <div class="chat-heading">
+        <span class="step" aria-hidden="true">٢</span>
+        <strong id="chatHeading">محادثة حل أسئلة QUREO</strong>
+        <span>بالعربي</span>
+      </div>
+      <div class="chat-log" id="chatTranscript" aria-live="polite" aria-relevant="additions text">
+        <div class="bubble assistant"><span class="bubble-label">مساعد QUREO</span>اسألني عن سؤال من JavaScript أو Python، أو ارفع صورته. هشرح لك الحل، ولو احتجت توضيحًا كمل كلامك هنا. المحادثة دي مؤقتة داخل الجلسة، وسياق آخر ٤ رسائل ممكن يروح لخادم المساعد مع سؤالك عشان أفهم المتابعة.</div>
+      </div>
+      <div class="composer">
+        <label class="label" id="questionLabel" for="question">سؤالك عن QUREO</label>
+        <textarea id="question" maxlength="12000" placeholder="اكتب السؤال أو قلّي إيه الجزء اللي مش واضح…"></textarea>
+        <div class="or" aria-hidden="true"></div>
+        <label class="upload" for="imageInput"><span aria-hidden="true">▧</span><span>صوّر السؤال أو اختَر صورة</span></label>
+        <input id="imageInput" type="file" accept="image/*" capture="environment">
+        <div class="preview-wrap" id="previewWrap">
+          <img class="preview" id="preview" alt="معاينة صورة السؤال">
+          <button class="remove" id="removeImage" type="button" aria-label="إزالة الصورة">×</button>
+        </div>
+        <p class="note">خلّي الصورة للسؤال والاختيارات فقط، ومن غير بيانات شخصية أو كلمة مرور.</p>
+        <div id="answerCard" class="answer-card" aria-hidden="true">
+          <div class="answer-top">
+            <h2 class="answer-title">شرح وإجابة مقترحة</h2>
+            <div class="answer-tools">
+              <button id="copyBtn" type="button">نسخ</button>
+              <button id="shareBtn" type="button">مشاركة</button>
+            </div>
+          </div>
+          <div class="answer-text" id="answerText"></div>
+          <p class="answer-source" id="answerSource"></p>
+        </div>
+        <div class="composer-bottom">
+          <p class="disclaimer">المحادثة تشرح فقط ولا تضغط الإجابة على QUREO. الضغط التلقائي محصور بالأنواع المدعومة بعد فحص صفحة QUREO.</p>
+          <button class="send-btn" id="solveBtn" type="button">إرسال السؤال</button>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="card local-card" aria-labelledby="localHeading">
+      <details class="local-details">
+        <summary><strong id="localHeading">خيارات إضافية على الهاتف</strong></summary>
+        <div class="local-details-content">
+          <strong>المعالجة المحلية عند انقطاع السحابة</strong>
+          <p id="localStatus" aria-live="polite">يمكن تجهيز نموذج صغير اختياريًا للاستخدام عند انقطاع السحابة.</p>
+          <button class="secondary" id="prepareLocalBtn" type="button">تجهيز النموذج المحلي على هذا الهاتف</button>
+          <p class="note">تنزيل النموذج يقارب 0.8 GB، ولا يبدأ إلا عند الضغط. بعد التجهيز، يعالج الأسئلة النصية محليًا؛ الصور تحتاج اتصالًا سحابيًا. قد يختلف الأداء حسب الهاتف وقد يحذف المتصفح الملفات المؤقتة.</p>
+          <div class="saved-task" id="savedTaskBox">
+            <strong>توجد مهمة غير مكتملة</strong>
+            <p id="savedHint">حُفظت هذه المهمة على هذا الهاتف للاستئناف.</p>
+            <div class="saved-actions">
+              <button class="secondary" id="resumeSavedBtn" type="button">استئناف المهمة المحفوظة</button>
+              <button class="small-btn" id="clearSavedBtn" type="button">مسح المحفوظة</button>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <footer>مساعد مستقل لحل QUREO. لا يضمن إكمال كل الدروس، ودرجة الثقة أو التحقق النصي ليسا برهانًا على الصحة. عند سؤال غير واضح، تحقق منه بنفسك. بيانات الدخول لا تُرسل إلا إلى صفحة QUREO، أما محتوى السؤال وسياق المحادثة المحدود فقد يُرسل إلى خادم المساعد عند استخدام السحابة.</footer>
+  </main>
+  <script src="./local-inference.js" defer></script>
+  <script src="./preflight.js" defer></script>
+  <script src="./image-load-guard.js" defer></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>
