@@ -20,6 +20,8 @@ const CHAT_MEMORY_KEY = 'mohamedAiChatMemory';
 const RESPONSE_STYLE_KEY = 'mohamedAiResponseStyle';
 const FEEDBACK_KEY = 'mohamedAiFeedback';
 const TASK_MODE_KEY = 'mohamedAiTaskMode';
+const AGENT_PERMISSIONS_KEY = 'mohamedAiAgentPermissions';
+const DEFAULT_AGENT_PERMISSIONS = ['planning', 'image_analysis', 'code_help'];
 let taskMode = ['task', 'agent'].includes(localStorage.getItem(TASK_MODE_KEY)) ? localStorage.getItem(TASK_MODE_KEY) : 'chat';
 let responseStyle = localStorage.getItem(RESPONSE_STYLE_KEY) || 'balanced';
 let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
@@ -44,13 +46,23 @@ function applyAssistantMode() {
   $('question').placeholder = isQureo ? 'اكتب سؤال JavaScript أو Python أو قلّي الجزء غير الواضح…' : 'اكتب سؤالك أو اطلب مني مهمة…';
   $('disclaimer').textContent = isQureo ? 'المحادثة تشرح فقط ولا تضغط الإجابة على QUREO. التشغيل الآلي محصور بالأنواع المدعومة.' : 'لا تضع كلمات المرور أو البيانات الحساسة في المحادثة.';
   $('chatHeading').textContent = isQureo ? 'محادثة QUREO' : 'المحادثة';
+  $('agentPermissions').style.display = taskMode === 'agent' && !isQureo ? 'block' : 'none';
 }
 modeInputs.forEach(input => input.addEventListener('change', () => { assistantMode = input.value; localStorage.setItem(ASSISTANT_MODE_KEY, assistantMode); applyAssistantMode(); }));
 applyAssistantMode();
 $('clearPassword').addEventListener('click', () => { $('appPassword').value = ''; });
 const taskModeInput = $('taskMode');
 taskModeInput.value = taskMode;
-taskModeInput.addEventListener('change', () => { taskMode = taskModeInput.value; localStorage.setItem(TASK_MODE_KEY, taskMode); });
+taskModeInput.addEventListener('change', () => { taskMode = taskModeInput.value; localStorage.setItem(TASK_MODE_KEY, taskMode); $('agentPermissions').style.display = taskMode === 'agent' && assistantMode !== 'qureo' ? 'block' : 'none'; });
+const agentPermissionInputs = [...document.querySelectorAll('input[name=agentPermission]')];
+let agentPermissions = (() => { try { const saved = JSON.parse(localStorage.getItem(AGENT_PERMISSIONS_KEY) || 'null'); return Array.isArray(saved) ? saved : DEFAULT_AGENT_PERMISSIONS; } catch { return DEFAULT_AGENT_PERMISSIONS; } })();
+agentPermissionInputs.forEach(input => {
+  input.checked = agentPermissions.includes(input.value);
+  input.addEventListener('change', () => {
+    agentPermissions = agentPermissionInputs.filter(item => item.checked).map(item => item.value);
+    localStorage.setItem(AGENT_PERMISSIONS_KEY, JSON.stringify(agentPermissions));
+  });
+});
 const responseStyleInput = $('responseStyle');
 if (!['balanced', 'concise', 'detailed', 'steps'].includes(responseStyle)) responseStyle = 'balanced';
 responseStyleInput.value = responseStyle;
@@ -446,7 +458,7 @@ async function runTask(task) {
       response = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode, responseStyle, taskMode }),
+        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode, responseStyle, taskMode, agentPermissions }),
         signal: controller.signal,
       });
     } finally { clearTimeout(timer); }

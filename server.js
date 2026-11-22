@@ -444,6 +444,11 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         const mode = body.mode === 'qureo' ? 'qureo' : 'general';
         const responseStyle = ['balanced', 'concise', 'detailed', 'steps'].includes(body.responseStyle) ? body.responseStyle : 'balanced';
         const taskMode = ['task', 'agent'].includes(body.taskMode) ? body.taskMode : 'chat';
+        const allowedAgentPermissions = new Set(['planning', 'image_analysis', 'code_help']);
+        const agentPermissions = Array.isArray(body.agentPermissions) ? body.agentPermissions.filter(item => allowedAgentPermissions.has(item)).slice(0, 10) : [];
+        const permissionInstruction = taskMode === 'agent'
+          ? `الصلاحيات المسموحة حاليًا: ${agentPermissions.length ? agentPermissions.join(', ') : 'لا توجد صلاحيات إضافية'}. لا تستخدم قدرة غير موجودة.`
+          : '';
         const taskInstruction = taskMode === 'agent'
           ? 'أنت وكيل ذكي آمن: افهم الهدف، لخّصه، ضع خطة قصيرة، ثم ميّز بوضوح بين ما تستطيع فعله داخل الرد وما يحتاج أداة أو موافقة. لا تنفذ أو تدّعي تنفيذ رسائل أو عمليات شراء أو حذف أو نشر أو تغيير حسابات دون موافقة صريحة. لا تخترع نتائج أدوات؛ إذا لم تتوفر أداة قل ذلك.'
           : taskMode === 'task'
@@ -475,13 +480,14 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         const failures = [];
         for (const provider of providers) {
           try {
-            const answer = await provider.run({ question, image, systemPrompt: `${mode === 'qureo' ? SYSTEM_PROMPT : GENERAL_SYSTEM_PROMPT}\n\nطريقة المساعدة: ${taskInstruction}\nأسلوب الرد المطلوب: ${styleInstruction}` });
+            const answer = await provider.run({ question, image, systemPrompt: `${mode === 'qureo' ? SYSTEM_PROMPT : GENERAL_SYSTEM_PROMPT}\n\nطريقة المساعدة: ${taskInstruction}\n${permissionInstruction}\nأسلوب الرد المطلوب: ${styleInstruction}` });
             return sendApi(200, {
               answer,
               mode,
               responseStyle,
               taskMode,
               agentEnabled: taskMode === 'agent',
+              agentPermissions,
               provider: provider.name,
               model: provider.model,
               fallbackUsed: failures.length > 0,

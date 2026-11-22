@@ -149,6 +149,13 @@
         <option value="detailed">مفصل وعميق</option>
         <option value="steps">خطوة بخطوة</option>
       </select>
+      <div id="agentPermissions" style="display:none;margin-top:10px;padding:10px 11px;border:1px solid #dfe6f2;border-radius:12px;background:#f8faff">
+        <strong style="font-size:12px">صلاحيات الوكيل</strong>
+        <label class="cache-toggle"><input type="checkbox" name="agentPermission" value="planning" checked> إنشاء خطط وقوائم مهام</label>
+        <label class="cache-toggle"><input type="checkbox" name="agentPermission" value="image_analysis" checked> تحليل الصور والملفات المرفقة</label>
+        <label class="cache-toggle"><input type="checkbox" name="agentPermission" value="code_help" checked> كتابة وشرح الكود</label>
+        <p class="note">لا توجد صلاحيات إرسال أو شراء أو حذف أو نشر تلقائيًا. أي إجراء خارجي يحتاج أداة وموافقة صريحة.</p>
+      </div>
     </section>
 
     <section class="card auto-card" id="qureoAutoCard" aria-labelledby="autoHeading">
