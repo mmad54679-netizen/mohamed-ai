@@ -15,6 +15,8 @@ const LOCAL_PREPARED_KEY = 'qureoLocalModelPrepared';
 const SERVER_BASE_KEY = 'qureoPrivateServerBaseUrl';
 const DEFAULT_WORKER_URL = 'https://qureo-helper.qureo-helper.workers.dev';
 const ASSISTANT_MODE_KEY = 'mohamedAiAssistantMode';
+const REMEMBER_CHAT_KEY = 'mohamedAiRememberChat';
+const CHAT_MEMORY_KEY = 'mohamedAiChatMemory';
 let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
 const ANDROID_NATIVE = new URLSearchParams(window.location.search).get('native') === '1';
 let imageData = '';
@@ -41,6 +43,44 @@ function applyAssistantMode() {
 modeInputs.forEach(input => input.addEventListener('change', () => { assistantMode = input.value; localStorage.setItem(ASSISTANT_MODE_KEY, assistantMode); applyAssistantMode(); }));
 applyAssistantMode();
 $('clearPassword').addEventListener('click', () => { $('appPassword').value = ''; });
+const rememberChatToggle = $('rememberChatToggle');
+rememberChatToggle.checked = localStorage.getItem(REMEMBER_CHAT_KEY) === 'yes';
+rememberChatToggle.addEventListener('change', () => {
+  localStorage.setItem(REMEMBER_CHAT_KEY, rememberChatToggle.checked ? 'yes' : 'no');
+  if (!rememberChatToggle.checked) localStorage.removeItem(CHAT_MEMORY_KEY);
+});
+function persistChatMemory() {
+  if (!rememberChatToggle.checked) return;
+  try { localStorage.setItem(CHAT_MEMORY_KEY, JSON.stringify(chatHistory.slice(-20))); } catch {}
+}
+function restoreChatMemory() {
+  if (!rememberChatToggle.checked) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHAT_MEMORY_KEY) || '[]');
+    if (!Array.isArray(saved)) return;
+    saved.filter(item => ['user', 'assistant'].includes(item?.role) && item?.text).forEach(item => {
+      appendChatMessage(item.role, item.text, false);
+      chatHistory.push({ role: item.role, text: String(item.text).slice(0, 1800) });
+    });
+  } catch {}
+}
+function clearChat() {
+  chatHistory.length = 0;
+  latestAssistantAnswer = '';
+  localStorage.removeItem(CHAT_MEMORY_KEY);
+  chatTranscript.querySelectorAll('.bubble, .answer-card').forEach(node => node.remove());
+  appendChatMessage('assistant', 'تم مسح المحادثة. أنا جاهز لسؤالك الجديد.', false);
+}
+function exportChat() {
+  const lines = chatHistory.map(item => `${item.role === 'user' ? 'أنت' : 'Mohamed AI'}: ${item.text}`);
+  if (!lines.length) { setStatus('لا توجد محادثة لتصديرها.', true); return; }
+  const blob = new Blob([lines.join('\n\n')], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a'); link.href = url; link.download = 'mohamed-ai-chat.txt'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$('clearChatBtn').addEventListener('click', clearChat);
+$('exportChatBtn').addEventListener('click', exportChat);
 if (ANDROID_NATIVE) {
   $('serverBox').style.display = 'block';
   $('serverBaseUrl').value = localStorage.getItem(SERVER_BASE_KEY) || DEFAULT_WORKER_URL;
@@ -269,17 +309,19 @@ const chatHistory = [];
 
 function rememberChatEntry(role, text) {
   chatHistory.push({ role, text: String(text || '').slice(0, 1800) });
-  if (chatHistory.length > 8) chatHistory.splice(0, chatHistory.length - 8);
+  if (chatHistory.length > 20) chatHistory.splice(0, chatHistory.length - 20);
+  persistChatMemory();
 }
 
-function appendChatMessage(role, text) {
+function appendChatMessage(role, text, remember = false) {
   const bubble = document.createElement('div');
   bubble.className = `bubble ${role}`;
   const label = document.createElement('span');
   label.className = 'bubble-label';
-  label.textContent = role === 'user' ? 'أنت' : 'مساعد QUREO';
+  label.textContent = role === 'user' ? 'أنت' : 'Mohamed AI';
   bubble.append(label, document.createTextNode(String(text || '')));
   chatTranscript.appendChild(bubble);
+  if (remember) rememberChatEntry(role, text);
   chatTranscript.scrollTop = chatTranscript.scrollHeight;
 }
 
@@ -451,6 +493,7 @@ $('installBtn').addEventListener('click', async () => { if (!installPrompt) retu
   } else {
     updateLocalInfo('اختياري: تنزيل أولي بحجم مئات الميغابايت، ثم يمكن محاولة معالجة النص على الهاتف. استخدم Wi‑Fi إن أمكن.');
   }
+  restoreChatMemory();
   const saved = await loadTask();
   if (saved) {
     showSavedTask(saved);
