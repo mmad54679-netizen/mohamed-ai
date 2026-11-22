@@ -18,6 +18,7 @@ const ASSISTANT_MODE_KEY = 'mohamedAiAssistantMode';
 const REMEMBER_CHAT_KEY = 'mohamedAiRememberChat';
 const CHAT_MEMORY_KEY = 'mohamedAiChatMemory';
 const RESPONSE_STYLE_KEY = 'mohamedAiResponseStyle';
+const FEEDBACK_KEY = 'mohamedAiFeedback';
 let responseStyle = localStorage.getItem(RESPONSE_STYLE_KEY) || 'balanced';
 let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
 const ANDROID_NATIVE = new URLSearchParams(window.location.search).get('native') === '1';
@@ -295,8 +296,10 @@ function setAnswer(text, source) {
   card.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
   card.querySelector('.answer-text').textContent = text;
   card.querySelector('.answer-source').textContent = source;
-  const copyButton = card.querySelector('.answer-tools button:first-child');
-  const shareButton = card.querySelector('.answer-tools button:last-child');
+  const toolButtons = [...card.querySelectorAll('.answer-tools button')];
+  const copyButton = toolButtons[0];
+  const shareButton = toolButtons[1];
+  const feedbackButtons = toolButtons.slice(2);
   copyButton.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(text); copyButton.textContent = 'تم النسخ'; setTimeout(() => { copyButton.textContent = 'نسخ'; }, 1600); }
     catch { setStatus('تعذّر النسخ؛ حدّد الشرح وانسخه يدويًا.', true); }
@@ -305,6 +308,15 @@ function setAnswer(text, source) {
     if (navigator.share) { try { await navigator.share({ title: assistantMode === 'qureo' ? 'شرح سؤال QUREO' : 'Mohamed AI', text }); } catch {} }
     else { try { await navigator.clipboard.writeText(text); setStatus('نُسخ الشرح؛ يمكنك لصقه في التطبيق الذي تريده.'); } catch { setStatus('المشاركة غير متاحة على هذا المتصفح.', true); } }
   });
+  feedbackButtons.forEach(button => button.addEventListener('click', () => {
+    let feedback = { positive: 0, negative: 0 };
+    try { feedback = { ...feedback, ...JSON.parse(localStorage.getItem(FEEDBACK_KEY) || '{}') }; } catch {}
+    const kind = button.dataset.feedback;
+    feedback[kind] = Number(feedback[kind] || 0) + 1;
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify(feedback));
+    feedbackButtons.forEach(item => { item.disabled = true; item.style.opacity = '.55'; });
+    setStatus(kind === 'positive' ? 'شكرًا، سجّلت أن الإجابة مفيدة.' : 'سجّلت أن الإجابة تحتاج تحسينًا. لا يتم إرسال نص المحادثة.');
+  }));
   chatTranscript.appendChild(card);
   rememberChatEntry('assistant', text);
   chatTranscript.scrollTop = chatTranscript.scrollHeight;
