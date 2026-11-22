@@ -377,6 +377,50 @@ function parseAgentPlan(text, snapshot = {}) {
   return { actions, message: '' };
 }
 
+function calculateSafeExpression(expression) {
+  const source = String(expression || '').replace(/,/g, '').trim();
+  if (!source || source.length > 120 || !/^[0-9+\-*/%.()\s]+$/.test(source)) return null;
+  const tokens = source.match(/\d+(?:\.\d+)?|[()+\-*/%]/g) || [];
+  if (tokens.join('') !== source.replace(/\s+/g, '')) return null;
+  const values = [];
+  const ops = [];
+  const precedence = { '+': 1, '-': 1, '*': 2, '/': 2, '%': 2 };
+  const apply = () => {
+    const op = ops.pop(); const b = values.pop(); const a = values.pop();
+    if (a === undefined || b === undefined) throw new Error('invalid expression');
+    if (op === '+') values.push(a + b); else if (op === '-') values.push(a - b);
+    else if (op === '*') values.push(a * b); else if (op === '/') { if (b === 0) throw new Error('division by zero'); values.push(a / b); }
+    else values.push(a % b);
+  };
+  let previous = 'operator';
+  for (const token of tokens) {
+    if (/^\d/.test(token)) { values.push(Number(token)); previous = 'value'; continue; }
+    if (token === '(') { ops.push(token); previous = 'operator'; continue; }
+    if (token === ')') { while (ops.length && ops.at(-1) !== '(') apply(); if (ops.pop() !== '(') throw new Error('unbalanced'); previous = 'value'; continue; }
+    if (token === '-' && previous === 'operator') { values.push(0); }
+    while (ops.length && ops.at(-1) !== '(' && precedence[ops.at(-1)] >= precedence[token]) apply();
+    ops.push(token); previous = 'operator';
+  }
+  while (ops.length) { if (ops.at(-1) === '(') throw new Error('unbalanced'); apply(); }
+  if (values.length !== 1 || !Number.isFinite(values[0])) return null;
+  return values[0];
+}
+
+function runLocalAgentTool({ question, permissions }) {
+  const text = String(question || '').trim();
+  const allowed = new Set(permissions);
+  if (allowed.has('calculator') && /^(?:احسب|حساب|calculate|calc)\s*[:：]?\s*/i.test(text)) {
+    const expression = text.replace(/^(?:احسب|حساب|calculate|calc)\s*[:：]?\s*/i, '').trim();
+    const result = calculateSafeExpression(expression);
+    if (result === null) return { answer: 'لم أستطع قراءة العملية الحسابية بأمان. استخدم أرقامًا و + - * / % والأقواس فقط.', tool: 'calculator' };
+    return { answer: `نتيجة الحساب: ${result}`, tool: 'calculator' };
+  }
+  if (allowed.has('date_time') && /^(?:الوقت|التاريخ|date|time|now)\s*\??$/i.test(text)) {
+    return { answer: `الوقت الحالي بصيغة UTC: ${new Date().toISOString()}`, tool: 'date_time' };
+  }
+  return null;
+}
+
 function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger = console } = {}) {
   const mockMode = env.MOCK_MODE === '1';
   const appPassword = env.APP_PASSWORD || '';
@@ -444,10 +488,10 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         const mode = body.mode === 'qureo' ? 'qureo' : 'general';
         const responseStyle = ['balanced', 'concise', 'detailed', 'steps'].includes(body.responseStyle) ? body.responseStyle : 'balanced';
         const taskMode = ['task', 'agent'].includes(body.taskMode) ? body.taskMode : 'chat';
-        const allowedAgentPermissions = new Set(['planning', 'image_analysis', 'code_help']);
+        const allowedAgentPermissions = new Set(['planning', 'image_analysis', 'code_help', 'calculator', 'date_time']);
         const agentPermissions = Array.isArray(body.agentPermissions) ? body.agentPermissions.filter(item => allowedAgentPermissions.has(item)).slice(0, 10) : [];
         const permissionInstruction = taskMode === 'agent'
-          ? `الصلاحيات المسموحة حاليًا: ${agentPermissions.length ? agentPermissions.join(', ') : 'لا توجد صلاحيات إضافية'}. لا تستخدم قدرة غير موجودة.`
+          ? `الصلاحيات المسموحة حاليًا: ${agentPermissions.length ? agentPermissions.join(', ') : 'لا توجد صلاحيات إضافية'}. لا تستخدم قدرة غير موجودة. الأدوات المحلية الفعلية المتاحة الآن: calculator عند بدء الطلب بـ احسب/calculate، وdate_time عند طلب الوقت أو التاريخ.`
           : '';
         const taskInstruction = taskMode === 'agent'
           ? 'أنت وكيل ذكي آمن: افهم الهدف، لخّصه، ضع خطة قصيرة، ثم ميّز بوضوح بين ما تستطيع فعله داخل الرد وما يحتاج أداة أو موافقة. لا تنفذ أو تدّعي تنفيذ رسائل أو عمليات شراء أو حذف أو نشر أو تغيير حسابات دون موافقة صريحة. لا تخترع نتائج أدوات؛ إذا لم تتوفر أداة قل ذلك.'
@@ -469,6 +513,12 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
             answer: 'نجح اختبار المعاينة. لم يُرسل السؤال إلى أي مزوّد خارجي.',
             provider: 'mock', fallbackUsed: false,
           });
+        }
+        if (taskMode === 'agent') {
+          const localToolResult = runLocalAgentTool({ question, permissions: agentPermissions });
+          if (localToolResult) {
+            return sendApi(200, { answer: localToolResult.answer, provider: 'local-tool', tool: localToolResult.tool, mode, taskMode, agentPermissions, fallbackUsed: false });
+          }
         }
         if (!providers.length) {
           return sendApi(503, {

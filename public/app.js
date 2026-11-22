@@ -21,7 +21,7 @@ const RESPONSE_STYLE_KEY = 'mohamedAiResponseStyle';
 const FEEDBACK_KEY = 'mohamedAiFeedback';
 const TASK_MODE_KEY = 'mohamedAiTaskMode';
 const AGENT_PERMISSIONS_KEY = 'mohamedAiAgentPermissions';
-const DEFAULT_AGENT_PERMISSIONS = ['planning', 'image_analysis', 'code_help'];
+const DEFAULT_AGENT_PERMISSIONS = ['planning', 'image_analysis', 'code_help', 'calculator', 'date_time'];
 let taskMode = ['task', 'agent'].includes(localStorage.getItem(TASK_MODE_KEY)) ? localStorage.getItem(TASK_MODE_KEY) : 'chat';
 let responseStyle = localStorage.getItem(RESPONSE_STYLE_KEY) || 'balanced';
 let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
