@@ -473,6 +473,15 @@ async function webSearchRequest({ fetchImpl, apiKey, query, count = 5 }) {
   return body;
 }
 
+async function googleApiRequest({ fetchImpl, token, baseUrl, endpoint }) {
+  const response = await fetchWithTimeout(fetchImpl, `${baseUrl}${endpoint}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  }, 'google-api', 15000);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(body.error?.message || 'تعذّر قراءة Google.'), { status: response.status || 502 });
+  return body;
+}
+
 function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger = console } = {}) {
   const mockMode = env.MOCK_MODE === '1';
   const appPassword = env.APP_PASSWORD || '';
@@ -533,6 +542,38 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
       }
       return sendApi(200, { connectors: connectorStatus(env), note: 'التوفر لا يعني منح صلاحية التنفيذ.' });
+    }
+
+    if (url.pathname === '/api/connectors/gmail/messages' && req.method === 'GET') {
+      if (appPassword && req.headers.authorization !== `Bearer ${appPassword}`) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      if (!env.GMAIL_TOKEN) return sendApi(503, { error: 'تكامل Gmail غير مهيأ على الخادم.', code: 'GMAIL_NOT_CONFIGURED' });
+      try {
+        const query = String(url.searchParams.get('q') || '').trim().slice(0, 300);
+        const maxResults = Math.max(1, Math.min(20, Number(url.searchParams.get('maxResults') || 10)));
+        const params = new URLSearchParams({ maxResults: String(maxResults) }); if (query) params.set('q', query);
+        const body = await googleApiRequest({ fetchImpl, token: env.GMAIL_TOKEN, baseUrl: 'https://gmail.googleapis.com/gmail/v1', endpoint: `/users/me/messages?${params}` });
+        const messages = await Promise.all((body.messages || []).slice(0, maxResults).map(async item => {
+          try {
+            const detail = await googleApiRequest({ fetchImpl, token: env.GMAIL_TOKEN, baseUrl: 'https://gmail.googleapis.com/gmail/v1', endpoint: `/users/me/messages/${encodeURIComponent(item.id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date` });
+            const headers = Object.fromEntries((detail.payload?.headers || []).map(header => [header.name.toLowerCase(), header.value]));
+            return { id: detail.id, threadId: detail.threadId, snippet: String(detail.snippet || '').slice(0, 500), from: headers.from || '', subject: headers.subject || '', date: headers.date || '', labelIds: detail.labelIds || [] };
+          } catch { return { id: item.id, threadId: item.threadId, snippet: '', from: '', subject: '', date: '', labelIds: [] }; }
+        }));
+        return sendApi(200, { source: 'gmail', readOnly: true, query, messages, nextPageToken: body.nextPageToken || null });
+      } catch (error) { return sendApi(error.status || 502, { error: error.message || 'تعذّرت قراءة Gmail.', code: 'GMAIL_READ_FAILED' }); }
+    }
+
+    if (url.pathname === '/api/connectors/calendar/events' && req.method === 'GET') {
+      if (appPassword && req.headers.authorization !== `Bearer ${appPassword}`) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      if (!env.GOOGLE_CALENDAR_TOKEN) return sendApi(503, { error: 'تكامل Google Calendar غير مهيأ على الخادم.', code: 'CALENDAR_NOT_CONFIGURED' });
+      try {
+        const now = new Date();
+        const timeMin = String(url.searchParams.get('timeMin') || now.toISOString());
+        const timeMax = String(url.searchParams.get('timeMax') || new Date(now.getTime() + 30 * 86400000).toISOString());
+        const params = new URLSearchParams({ timeMin, timeMax, singleEvents: 'true', orderBy: 'startTime', maxResults: String(Math.max(1, Math.min(50, Number(url.searchParams.get('maxResults') || 20))) ) });
+        const body = await googleApiRequest({ fetchImpl, token: env.GOOGLE_CALENDAR_TOKEN, baseUrl: 'https://www.googleapis.com/calendar/v3', endpoint: `/calendars/primary/events?${params}` });
+        return sendApi(200, { source: 'google-calendar', readOnly: true, events: (body.items || []).map(event => ({ id: event.id, status: event.status, summary: String(event.summary || '').slice(0, 300), description: String(event.description || '').slice(0, 1000), start: event.start || {}, end: event.end || {}, location: String(event.location || '').slice(0, 500), htmlLink: event.htmlLink || '' })) , nextPageToken: body.nextPageToken || null });
+      } catch (error) { return sendApi(error.status || 502, { error: error.message || 'تعذّرت قراءة Google Calendar.', code: 'CALENDAR_READ_FAILED' }); }
     }
 
     if (url.pathname === '/api/connectors/web-search' && req.method === 'GET') {
