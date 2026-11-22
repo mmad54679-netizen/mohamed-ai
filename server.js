@@ -445,6 +445,24 @@ async function githubApi({ fetchImpl, token, endpoint }) {
   return body;
 }
 
+async function googleDriveRequest({ fetchImpl, token, endpoint, binary = false }) {
+  const response = await fetchWithTimeout(fetchImpl, `https://www.googleapis.com/drive/v3${endpoint}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: binary ? '*/*' : 'application/json' },
+  }, 'google-drive', 20000);
+  if (!response.ok) {
+    const message = await response.text().catch(() => 'تعذّر قراءة Google Drive.');
+    throw Object.assign(new Error(message.slice(0, 300)), { status: response.status || 502 });
+  }
+  if (binary) return { contentType: response.headers.get('content-type') || 'application/octet-stream', bytes: Buffer.from(await response.arrayBuffer()) };
+  return response.json().catch(() => ({}));
+}
+
+function googleDriveFileId(value) {
+  const id = String(value || '').trim();
+  if (!/^[A-Za-z0-9_-]{10,200}$/.test(id)) throw Object.assign(new Error('معرّف ملف Google Drive غير صالح.'), { status: 400 });
+  return id;
+}
+
 function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger = console } = {}) {
   const mockMode = env.MOCK_MODE === '1';
   const appPassword = env.APP_PASSWORD || '';
@@ -505,6 +523,38 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
       }
       return sendApi(200, { connectors: connectorStatus(env), note: 'التوفر لا يعني منح صلاحية التنفيذ.' });
+    }
+
+    if (url.pathname === '/api/connectors/google-drive/files' && req.method === 'GET') {
+      if (appPassword && req.headers.authorization !== `Bearer ${appPassword}`) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      if (!env.GOOGLE_DRIVE_TOKEN) return sendApi(503, { error: 'تكامل Google Drive غير مهيأ على الخادم.', code: 'GOOGLE_DRIVE_NOT_CONFIGURED' });
+      try {
+        const pageToken = String(url.searchParams.get('pageToken') || '').trim();
+        const params = new URLSearchParams({ pageSize: '50', orderBy: 'modifiedTime desc', fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,trashed)' });
+        params.set('q', "trashed = false and (mimeType = 'application/pdf' or mimeType = 'application/msword' or mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType = 'application/vnd.google-apps.document')");
+        if (pageToken) params.set('pageToken', pageToken.slice(0, 500));
+        const body = await googleDriveRequest({ fetchImpl, token: env.GOOGLE_DRIVE_TOKEN, endpoint: `/files?${params}` });
+        return sendApi(200, { source: 'google-drive', readOnly: true, files: (body.files || []).map(file => ({ id: file.id, name: file.name, mimeType: file.mimeType, size: file.size ? Number(file.size) : null, modifiedTime: file.modifiedTime, url: file.webViewLink })) , nextPageToken: body.nextPageToken || null });
+      } catch (error) { return sendApi(error.status || 502, { error: error.message || 'تعذّرت قراءة ملفات Google Drive.', code: 'GOOGLE_DRIVE_LIST_FAILED' }); }
+    }
+
+    if (url.pathname === '/api/connectors/google-drive/file' && req.method === 'GET') {
+      if (appPassword && req.headers.authorization !== `Bearer ${appPassword}`) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      if (!env.GOOGLE_DRIVE_TOKEN) return sendApi(503, { error: 'تكامل Google Drive غير مهيأ على الخادم.', code: 'GOOGLE_DRIVE_NOT_CONFIGURED' });
+      try {
+        const id = googleDriveFileId(url.searchParams.get('id'));
+        const metadata = await googleDriveRequest({ fetchImpl, token: env.GOOGLE_DRIVE_TOKEN, endpoint: `/files/${encodeURIComponent(id)}?fields=id,name,mimeType,size,modifiedTime,webViewLink,trashed` });
+        if (metadata.trashed) return sendApi(404, { error: 'الملف في سلة المهملات.', code: 'GOOGLE_DRIVE_TRASHED' });
+        const exportable = metadata.mimeType === 'application/vnd.google-apps.document';
+        const supported = exportable || ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(metadata.mimeType);
+        if (!supported) return sendApi(415, { error: 'نوع الملف غير مدعوم للقراءة الآمنة.', code: 'GOOGLE_DRIVE_UNSUPPORTED_TYPE' });
+        if (!exportable && Number(metadata.size || 0) > 10 * 1024 * 1024) return sendApi(413, { error: 'الملف أكبر من حد القراءة 10MB.', code: 'GOOGLE_DRIVE_FILE_TOO_LARGE' });
+        const endpoint = exportable ? `/files/${encodeURIComponent(id)}/export?mimeType=text%2Fplain` : `/files/${encodeURIComponent(id)}?alt=media`;
+        const payload = await googleDriveRequest({ fetchImpl, token: env.GOOGLE_DRIVE_TOKEN, endpoint, binary: true });
+        if (payload.bytes.length > 10 * 1024 * 1024) return sendApi(413, { error: 'الملف أكبر من حد القراءة 10MB.', code: 'GOOGLE_DRIVE_FILE_TOO_LARGE' });
+        const textLike = exportable || payload.contentType.startsWith('text/');
+        return sendApi(200, { source: 'google-drive', readOnly: true, file: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, modifiedTime: metadata.modifiedTime, url: metadata.webViewLink }, contentType: payload.contentType, ...(textLike ? { text: payload.bytes.toString('utf8') } : { contentBase64: payload.bytes.toString('base64') }) });
+      } catch (error) { return sendApi(error.status || 502, { error: error.message || 'تعذّرت قراءة ملف Google Drive.', code: 'GOOGLE_DRIVE_FILE_READ_FAILED' }); }
     }
 
     if (url.pathname === '/api/connectors/github/repos' && req.method === 'GET') {
