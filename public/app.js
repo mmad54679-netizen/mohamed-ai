@@ -48,6 +48,68 @@ function applyAssistantMode() {
   $('chatHeading').textContent = isQureo ? 'محادثة QUREO' : 'المحادثة';
   $('agentPermissions').style.display = taskMode === 'agent' && !isQureo ? 'block' : 'none';
 }
+
+const LOCAL_SKILLS = [
+  ['conversation', 'المحادثة العامة', 'أساسي', 'إجابة عربية دقيقة ومنظمة.'],
+  ['writing', 'الكتابة والتحرير', 'محتوى', 'صياغة ورسائل وإعادة كتابة.'],
+  ['translation', 'الترجمة', 'لغة', 'ترجمة تحافظ على المعنى والنبرة.'],
+  ['summarization', 'التلخيص والاستخراج', 'محتوى', 'تلخيص واستخراج النقاط المهمة.'],
+  ['tutoring', 'التعليم والشرح', 'تعليم', 'شرح خطوة بخطوة ومراجعة.'],
+  ['coding', 'البرمجة ومراجعة الكود', 'برمجة', 'شرح وكتابة وتصحيح الكود.'],
+  ['safe_calculator', 'الحساب الآمن', 'أدوات محلية', 'عمليات رياضية دون تنفيذ كود.'],
+  ['date_time', 'الوقت والتاريخ', 'أدوات محلية', 'قراءة الوقت بصيغة UTC.'],
+  ['planning', 'التخطيط والمهام', 'وكيل', 'خطة قصيرة وتحديد الموافقات.'],
+  ['image_analysis', 'تحليل الصور', 'وسائط', 'يعتمد على مزود النموذج.'],
+  ['voice_input', 'الإدخال الصوتي العربي', 'جهاز', 'تحويل الكلام إلى نص محليًا.'],
+  ['speech_output', 'قراءة الرد بصوت عربي', 'جهاز', 'نطق آخر إجابة محليًا.'],
+  ['local_inference', 'المعالجة المحلية', 'خصوصية', 'اختيارية بعد تنزيل النموذج.'],
+  ['github_read', 'قراءة GitHub', 'تكاملات', 'قراءة فقط للمستودعات والملفات.'],
+  ['drive_read', 'قراءة Google Drive', 'تكاملات', 'PDF وWord وGoogle Docs.'],
+  ['gmail_read', 'قراءة Gmail', 'تكاملات', 'بحث وmetadata فقط.'],
+  ['calendar_read', 'قراءة Google Calendar', 'تكاملات', 'عرض الأحداث فقط.'],
+  ['web_search', 'البحث في الويب', 'بحث', 'مصادر وروابط ومقتطفات قراءة فقط.'],
+  ['qureo_safe', 'مساعد QUREO الآمن', 'تعليم', 'تشغيل محدود بعد التحقق.'],
+  ['export_share', 'التصدير والمشاركة', 'إنتاجية', 'بعد طلب المستخدم من الجهاز.'],
+];
+function skillStateLabel(state) {
+  return { available: 'متاحة', configured: 'مهيأة', needs_setup: 'إعداد مطلوب', optional: 'اختيارية', disabled: 'متوقفة' }[state] || 'متاحة';
+}
+function renderSkills(skills = LOCAL_SKILLS.map(([id, name, category, description]) => ({ id, name, category, description, state: ['github_read', 'drive_read', 'gmail_read', 'calendar_read', 'web_search', 'image_analysis'].includes(id) ? 'needs_setup' : (id === 'local_inference' ? 'optional' : 'available') }))) {
+  const grid = $('skillsGrid');
+  if (!grid) return;
+  grid.replaceChildren();
+  skills.forEach(skill => {
+    const item = document.createElement('article');
+    item.className = 'skill-item';
+    const name = document.createElement('div');
+    name.className = 'skill-name';
+    name.append(document.createTextNode(`${skill.name} · ${skill.category || ''}`));
+    const state = document.createElement('span');
+    state.className = `skill-state ${skill.state || 'available'}`;
+    state.textContent = skillStateLabel(skill.state);
+    name.append(state);
+    const description = document.createElement('div');
+    description.className = 'skill-desc';
+    description.textContent = skill.description || skill.reason || '';
+    item.append(name, description);
+    grid.append(item);
+  });
+}
+async function refreshSkills() {
+  renderSkills();
+  try {
+    const headers = {};
+    const password = $('appPassword')?.value.trim();
+    if (password) headers.Authorization = `Bearer ${password}`;
+    const response = await fetch('/api/skills', { headers });
+    if (!response.ok) return;
+    const result = await response.json();
+    if (Array.isArray(result.skills)) renderSkills(result.skills);
+    $('skillsNote').textContent = 'الحالة محدثة من الخادم. القراءة هي الوضع الافتراضي؛ الإرسال والحذف والنشر ليستا مفعّلتين تلقائيًا.';
+  } catch {}
+}
+refreshSkills();
+$('appPassword').addEventListener('change', refreshSkills);
 modeInputs.forEach(input => input.addEventListener('change', () => { assistantMode = input.value; localStorage.setItem(ASSISTANT_MODE_KEY, assistantMode); applyAssistantMode(); }));
 applyAssistantMode();
 $('clearPassword').addEventListener('click', () => { $('appPassword').value = ''; });
