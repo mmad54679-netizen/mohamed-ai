@@ -463,6 +463,16 @@ function googleDriveFileId(value) {
   return id;
 }
 
+async function webSearchRequest({ fetchImpl, apiKey, query, count = 5 }) {
+  const endpoint = `https://api.bing.microsoft.com/v7.0/search?q=${encodeURIComponent(query)}&count=${count}&safeSearch=Strict&textDecorations=false&textFormat=Raw`;
+  const response = await fetchWithTimeout(fetchImpl, endpoint, {
+    headers: { 'Ocp-Apim-Subscription-Key': apiKey, Accept: 'application/json' },
+  }, 'web-search', 15000);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(body.message || 'تعذّر البحث في الويب.'), { status: response.status || 502 });
+  return body;
+}
+
 function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger = console } = {}) {
   const mockMode = env.MOCK_MODE === '1';
   const appPassword = env.APP_PASSWORD || '';
@@ -523,6 +533,19 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
       }
       return sendApi(200, { connectors: connectorStatus(env), note: 'التوفر لا يعني منح صلاحية التنفيذ.' });
+    }
+
+    if (url.pathname === '/api/connectors/web-search' && req.method === 'GET') {
+      if (appPassword && req.headers.authorization !== `Bearer ${appPassword}`) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      if (!env.WEB_SEARCH_API_KEY) return sendApi(503, { error: 'بحث الويب غير مهيأ على الخادم.', code: 'WEB_SEARCH_NOT_CONFIGURED' });
+      const query = String(url.searchParams.get('q') || '').trim();
+      if (!query || query.length > 500) return sendApi(400, { error: 'اكتب عبارة بحث من 1 إلى 500 حرف.', code: 'INVALID_SEARCH_QUERY' });
+      try {
+        const count = Math.max(1, Math.min(10, Number(url.searchParams.get('count') || 5)));
+        const body = await webSearchRequest({ fetchImpl, apiKey: env.WEB_SEARCH_API_KEY, query, count });
+        const results = (body.webPages?.value || []).map(item => ({ title: String(item.name || '').slice(0, 300), url: String(item.url || '').slice(0, 2000), snippet: String(item.snippet || '').slice(0, 1000), source: 'Bing Web Search' })).filter(item => item.url.startsWith('http'));
+        return sendApi(200, { source: 'web-search', readOnly: true, query, results });
+      } catch (error) { return sendApi(error.status || 502, { error: error.message || 'تعذّر البحث في الويب.', code: 'WEB_SEARCH_FAILED' }); }
     }
 
     if (url.pathname === '/api/connectors/google-drive/files' && req.method === 'GET') {

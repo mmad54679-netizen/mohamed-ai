@@ -62,3 +62,5 @@ ANDROID_HOME=/home/ubuntu/Android/Sdk ./gradlew testDebugUnitTest assembleDebug
 ## التكاملات
 
 طبقة التكاملات موثقة في `CONNECTORS.md`، وتعرض `/api/capabilities` حالة GitHub وGoogle Drive وGmail وCalendar والبحث والصوت دون كشف الأسرار. التوفر لا يمنح الوكيل صلاحية الإرسال أو الحذف أو التعديل.
+
+البحث في الويب يستخدم موصلًا للقراءة فقط ويعيد الروابط والمقتطفات مع المصدر. يجب ضبط `WEB_SEARCH_API_KEY` على الخادم قبل تفعيله.
