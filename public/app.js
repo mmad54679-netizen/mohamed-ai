@@ -14,6 +14,8 @@ const DB_KEY = 'active-task';
 const LOCAL_PREPARED_KEY = 'qureoLocalModelPrepared';
 const SERVER_BASE_KEY = 'qureoPrivateServerBaseUrl';
 const DEFAULT_WORKER_URL = 'https://qureo-helper.qureo-helper.workers.dev';
+const ASSISTANT_MODE_KEY = 'mohamedAiAssistantMode';
+let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
 const ANDROID_NATIVE = new URLSearchParams(window.location.search).get('native') === '1';
 let imageData = '';
 const imageLoadGuard = window.QureoImageLoadGuard();
@@ -21,10 +23,25 @@ let installPrompt = null;
 let dbPromise;
 
 $('appPassword').value = '';
+const modeInputs = [...document.querySelectorAll('input[name=assistantMode]')];
+function applyAssistantMode() {
+  const isQureo = assistantMode === 'qureo';
+  modeInputs.forEach(input => { input.checked = input.value === assistantMode; });
+  $('qureoAutoCard').style.display = isQureo && ANDROID_NATIVE ? 'block' : 'none';
+  $('solutionLibraryCard').style.display = isQureo && ANDROID_NATIVE ? 'block' : 'none';
+  $('modePill').textContent = isQureo ? 'وضع QUREO' : 'مساعد عام';
+  $('introTitle').textContent = isQureo ? 'أهلًا، أنا مساعد QUREO الآمن.' : 'أهلًا، أنا Mohamed AI.';
+  $('introText').textContent = isQureo ? 'أرسل سؤال JavaScript أو Python أو صورة له. سأشرح لك، ولن أضغط إجابة إلا داخل الأنواع المدعومة وبعد تحقق محلي واضح.' : 'اسألني بالعربي عن الدراسة، البرمجة، الكتابة، الترجمة، التخطيط أو أي موضوع عام. أشرح بوضوح وأقول لك عندما لا أستطيع التحقق من معلومة.';
+  $('introLimit').textContent = isQureo ? 'لا أخمّن — إذا كان السؤال ملتبسًا أتوقف' : 'لا أختلق المعلومات — اطلب مصادر أو تحقق من الأمور المهمة';
+  $('questionLabel').textContent = isQureo ? 'سؤالك عن QUREO' : 'رسالتك';
+  $('question').placeholder = isQureo ? 'اكتب سؤال JavaScript أو Python أو قلّي الجزء غير الواضح…' : 'اكتب سؤالك أو اطلب مني مهمة…';
+  $('disclaimer').textContent = isQureo ? 'المحادثة تشرح فقط ولا تضغط الإجابة على QUREO. التشغيل الآلي محصور بالأنواع المدعومة.' : 'لا تضع كلمات المرور أو البيانات الحساسة في المحادثة.';
+  $('chatHeading').textContent = isQureo ? 'محادثة QUREO' : 'المحادثة';
+}
+modeInputs.forEach(input => input.addEventListener('change', () => { assistantMode = input.value; localStorage.setItem(ASSISTANT_MODE_KEY, assistantMode); applyAssistantMode(); }));
+applyAssistantMode();
 $('clearPassword').addEventListener('click', () => { $('appPassword').value = ''; });
 if (ANDROID_NATIVE) {
-  $('qureoAutoCard').style.display = 'block';
-  $('solutionLibraryCard').style.display = 'block';
   $('serverBox').style.display = 'block';
   $('serverBaseUrl').value = localStorage.getItem(SERVER_BASE_KEY) || DEFAULT_WORKER_URL;
   $('serverBaseUrl').addEventListener('input', () => localStorage.setItem(SERVER_BASE_KEY, $('serverBaseUrl').value.trim()));
@@ -239,7 +256,7 @@ function setAnswer(text, source) {
     catch { setStatus('تعذّر النسخ؛ حدّد الشرح وانسخه يدويًا.', true); }
   });
   shareButton.addEventListener('click', async () => {
-    if (navigator.share) { try { await navigator.share({ title: 'شرح سؤال QUREO', text }); } catch {} }
+    if (navigator.share) { try { await navigator.share({ title: assistantMode === 'qureo' ? 'شرح سؤال QUREO' : 'Mohamed AI', text }); } catch {} }
     else { try { await navigator.clipboard.writeText(text); setStatus('نُسخ الشرح؛ يمكنك لصقه في التطبيق الذي تريده.'); } catch { setStatus('المشاركة غير متاحة على هذا المتصفح.', true); } }
   });
   chatTranscript.appendChild(card);
@@ -272,7 +289,7 @@ function questionWithConversation(questionText, image) {
   const remaining = Math.max(0, 11200 - current.length);
   if (!remaining) return current;
   const context = chatHistory.slice(-4).map(item => `${item.role === 'user' ? 'الطالب' : 'المساعد'}: ${item.text}`).join('\n');
-  const header = '\n\nسياق مختصر من محادثة أسئلة QUREO السابقة:\n';
+  const header = assistantMode === 'qureo' ? '\n\nسياق مختصر من محادثة أسئلة QUREO السابقة:\n' : '\n\nسياق مختصر من المحادثة السابقة:\n';
   return `${current}${header}${context.slice(-remaining)}`;
 }
 
@@ -343,7 +360,7 @@ async function runTask(task) {
     finishRun();
     return;
   }
-  const userMessage = text || 'أرفقت صورة لسؤال QUREO.';
+  const userMessage = text || (assistantMode === 'qureo' ? 'أرفقت صورة لسؤال QUREO.' : 'أرفقت صورة للتحليل.');
   appendChatMessage('user', userMessage);
   rememberChatEntry('user', userMessage);
 
@@ -364,7 +381,7 @@ async function runTask(task) {
       response = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ question: requestQuestion, image }),
+        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode }),
         signal: controller.signal,
       });
     } finally { clearTimeout(timer); }
@@ -405,7 +422,7 @@ async function runTask(task) {
   const stillSaved = await loadTask();
   showSavedTask(stillSaved || saved);
   setStatus(`${cloudFailure} بقيت المهمة محفوظة على الهاتف؛ اضغط «استئناف المهمة المحفوظة» بعد تجهيز النموذج أو عودة الاتصال.`, true);
-  const waitingReply = `ما قدرت أجهز الحل الآن. ${cloudFailure} حفظت السؤال على الهاتف لتقدر تستأنفه لاحقًا.`;
+  const waitingReply = `ما قدرت أجهز الرد الآن. ${cloudFailure} حفظت السؤال على الهاتف لتقدر تستأنفه لاحقًا.`;
   appendChatMessage('assistant', waitingReply);
   rememberChatEntry('assistant', waitingReply);
   finishRun();
@@ -418,7 +435,7 @@ $('copyBtn').addEventListener('click', async () => {
 });
 $('shareBtn').addEventListener('click', async () => {
   const text = latestAssistantAnswer || answerText.textContent;
-  if (navigator.share) { try { await navigator.share({ title: 'شرح سؤال QUREO', text }); } catch {} }
+  if (navigator.share) { try { await navigator.share({ title: assistantMode === 'qureo' ? 'شرح سؤال QUREO' : 'Mohamed AI', text }); } catch {} }
   else { try { await navigator.clipboard.writeText(text); setStatus('نُسخ الشرح؛ يمكنك لصقه في التطبيق الذي تريده.'); } catch { setStatus('المشاركة غير متاحة على هذا المتصفح.', true); } }
 });
 
