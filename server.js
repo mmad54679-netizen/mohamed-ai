@@ -422,6 +422,29 @@ function runLocalAgentTool({ question, permissions }) {
   return null;
 }
 
+function githubRepoName(value) {
+  const match = String(value || '').trim().match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
+  if (!match) throw Object.assign(new Error('استخدم اسم المستودع بصيغة owner/repository.'), { status: 400 });
+  return { owner: match[1], repo: match[2] };
+}
+
+function githubPath(value) {
+  const clean = String(value || '').trim().replace(/^\/+|\/+$/g, '');
+  if (!clean || clean.length > 400 || clean.includes('..') || /[\\\0]/.test(clean)) {
+    throw Object.assign(new Error('مسار الملف غير صالح.'), { status: 400 });
+  }
+  return clean;
+}
+
+async function githubApi({ fetchImpl, token, endpoint }) {
+  const response = await fetchWithTimeout(fetchImpl, `https://api.github.com${endpoint}`, {
+    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' },
+  }, 'github', 15000);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(body.message || 'تعذّر قراءة GitHub.'), { status: response.status || 502 });
+  return body;
+}
+
 function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger = console } = {}) {
   const mockMode = env.MOCK_MODE === '1';
   const appPassword = env.APP_PASSWORD || '';
@@ -482,6 +505,32 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
         return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
       }
       return sendApi(200, { connectors: connectorStatus(env), note: 'التوفر لا يعني منح صلاحية التنفيذ.' });
+    }
+
+    if (url.pathname === '/api/connectors/github/repos' && req.method === 'GET') {
+      if (appPassword && req.headers.authorization !== `Bearer ${appPassword}`) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      if (!env.GITHUB_TOKEN) return sendApi(503, { error: 'تكامل GitHub غير مهيأ على الخادم.', code: 'GITHUB_NOT_CONFIGURED' });
+      try {
+        const page = Math.max(1, Math.min(20, Number(url.searchParams.get('page') || 1)));
+        const body = await githubApi({ fetchImpl, token: env.GITHUB_TOKEN, endpoint: `/user/repos?per_page=50&page=${page}&sort=updated` });
+        return sendApi(200, { source: 'github', readOnly: true, repositories: body.map(repo => ({ nameWithOwner: repo.full_name, private: repo.private, description: repo.description || '', defaultBranch: repo.default_branch, updatedAt: repo.updated_at, url: repo.html_url })) });
+      } catch (error) { return sendApi(error.status || 502, { error: error.message || 'تعذّرت قراءة مستودعات GitHub.', code: 'GITHUB_READ_FAILED' }); }
+    }
+
+    if (url.pathname === '/api/connectors/github/file' && req.method === 'GET') {
+      if (appPassword && req.headers.authorization !== `Bearer ${appPassword}`) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      if (!env.GITHUB_TOKEN) return sendApi(503, { error: 'تكامل GitHub غير مهيأ على الخادم.', code: 'GITHUB_NOT_CONFIGURED' });
+      try {
+        const { owner, repo } = githubRepoName(url.searchParams.get('repo'));
+        const filePath = githubPath(url.searchParams.get('path'));
+        const ref = String(url.searchParams.get('ref') || '').trim();
+        const refQuery = ref && /^[A-Za-z0-9_.\/-]{1,120}$/.test(ref) ? `?ref=${encodeURIComponent(ref)}` : '';
+        const body = await githubApi({ fetchImpl, token: env.GITHUB_TOKEN, endpoint: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath}${refQuery}` });
+        if (Array.isArray(body) || body.type !== 'file') return sendApi(400, { error: 'المسار لا يشير إلى ملف واحد.', code: 'GITHUB_NOT_A_FILE' });
+        if (Number(body.size || 0) > 2 * 1024 * 1024) return sendApi(413, { error: 'الملف أكبر من حد القراءة 2MB.', code: 'GITHUB_FILE_TOO_LARGE' });
+        const content = body.encoding === 'base64' ? Buffer.from(body.content || '', 'base64').toString('utf8') : String(body.content || '');
+        return sendApi(200, { source: 'github', readOnly: true, repo: `${owner}/${repo}`, path: filePath, ref: body.sha, content: content.slice(0, 2 * 1024 * 1024), truncated: content.length > 2 * 1024 * 1024, url: body.html_url });
+      } catch (error) { return sendApi(error.status || 502, { error: error.message || 'تعذّرت قراءة ملف GitHub.', code: 'GITHUB_FILE_READ_FAILED' }); }
     }
 
     if (url.pathname === '/api/solve' && req.method === 'POST') {
