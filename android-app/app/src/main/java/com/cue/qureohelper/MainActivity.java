@@ -1,8 +1,10 @@
 package com.cue.qureohelper;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -10,6 +12,7 @@ import android.os.Bundle;
 import android.webkit.ValueCallback;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.PermissionRequest;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -84,6 +87,25 @@ public final class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                runOnUiThread(() -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                            && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        request.deny();
+                        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 31);
+                        return;
+                    }
+                    for (String resource : request.getResources()) {
+                        if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
+                            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                            return;
+                        }
+                    }
+                    request.deny();
+                });
+            }
+
+            @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
@@ -103,6 +125,10 @@ public final class MainActivity extends Activity {
         webView.addJavascriptInterface(new QureoBridge(), "CueQureo");
 
         setContentView(webView);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 31);
+        }
         if (savedInstanceState != null && webView.restoreState(savedInstanceState) != null) {
             return;
         }

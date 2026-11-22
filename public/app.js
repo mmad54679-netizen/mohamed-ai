@@ -297,6 +297,45 @@ function loadImage(file) {
 imageInput.addEventListener('change', () => loadImage(imageInput.files?.[0]));
 $('removeImage').addEventListener('click', clearImage);
 
+const voiceBtn = $('voiceBtn');
+const speakBtn = $('speakBtn');
+const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+if (SpeechRecognitionApi) {
+  recognition = new SpeechRecognitionApi();
+  recognition.lang = 'ar-SA';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.onstart = () => { listening = true; voiceBtn.classList.add('listening'); voiceBtn.textContent = 'إيقاف الاستماع'; setStatus('تحدث الآن بالعربية…'); };
+  recognition.onend = () => { listening = false; voiceBtn.classList.remove('listening'); voiceBtn.textContent = 'تحدث بالميكروفون'; };
+  recognition.onerror = event => { listening = false; voiceBtn.classList.remove('listening'); voiceBtn.textContent = 'تحدث بالميكروفون'; setStatus(event.error === 'not-allowed' ? 'لم تُمنح صلاحية الميكروفون.' : 'تعذّر فهم الصوت؛ جرّب مرة أخرى.', true); };
+  recognition.onresult = event => {
+    const parts = [];
+    for (let i = event.resultIndex; i < event.results.length; i += 1) parts.push(event.results[i][0].transcript);
+    question.value = parts.join(' ').trim();
+  };
+  voiceBtn.addEventListener('click', () => { if (listening) recognition.stop(); else { try { recognition.start(); } catch {} } });
+} else {
+  voiceBtn.disabled = true;
+  voiceBtn.title = 'الميكروفون غير مدعوم في هذا المتصفح أو WebView.';
+}
+if ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) {
+  speakBtn.addEventListener('click', () => {
+    const text = latestAssistantAnswer || answerText.textContent;
+    if (!text.trim()) { setStatus('لا توجد إجابة لقراءتها.', true); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ar-SA';
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+    setStatus('أقرأ آخر إجابة بصوت عربي على الجهاز.');
+  });
+} else {
+  speakBtn.disabled = true;
+  speakBtn.title = 'النطق غير مدعوم في هذا المتصفح أو WebView.';
+}
+
 function updateLocalInfo(text) {
   $('localStatus').textContent = text;
 }

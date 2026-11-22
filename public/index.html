@@ -75,6 +75,9 @@
     .upload:active{background:#eef3ff}
     .upload span:first-child{font-size:17px}
     input[type=file]{display:none}
+    .voice-row{display:flex;gap:8px;margin-top:9px}
+    .voice-row button{flex:1}
+    .voice-btn.listening{background:#ffecec;border-color:#e5a3a3;color:#a52d2d}
     .send-btn{margin-inline-start:auto;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:9px 15px;min-height:42px;font-weight:800;cursor:pointer}
     .send-btn:disabled{opacity:.55;cursor:wait}
     .preview-wrap{display:none;position:relative;margin-top:10px}
@@ -225,6 +228,10 @@
         <div class="or" aria-hidden="true"></div>
         <label class="upload" for="imageInput"><span aria-hidden="true">▧</span><span>صوّر السؤال أو اختَر صورة</span></label>
         <input id="imageInput" type="file" accept="image/*" capture="environment">
+        <div class="voice-row">
+          <button class="small-btn" id="voiceBtn" type="button">تحدث بالميكروفون</button>
+          <button class="small-btn" id="speakBtn" type="button">اقرأ آخر رد</button>
+        </div>
         <div class="preview-wrap" id="previewWrap">
           <img class="preview" id="preview" alt="معاينة صورة السؤال">
           <button class="remove" id="removeImage" type="button" aria-label="إزالة الصورة">×</button>
