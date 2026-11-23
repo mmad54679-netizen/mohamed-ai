@@ -23,7 +23,7 @@ const TASK_MODE_KEY = 'mohamedAiTaskMode';
 const AGENT_PERMISSIONS_KEY = 'mohamedAiAgentPermissions';
 const OPENMANUS_KEY = 'mohamedAiUseOpenManus';
 const DEFAULT_AGENT_PERMISSIONS = ['planning', 'image_analysis', 'code_help', 'calculator', 'date_time'];
-let taskMode = ['task', 'agent'].includes(localStorage.getItem(TASK_MODE_KEY)) ? localStorage.getItem(TASK_MODE_KEY) : 'chat';
+let taskMode = ['task', 'agent', 'team'].includes(localStorage.getItem(TASK_MODE_KEY)) ? localStorage.getItem(TASK_MODE_KEY) : 'chat';
 let responseStyle = localStorage.getItem(RESPONSE_STYLE_KEY) || 'balanced';
 let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
 const ANDROID_NATIVE = new URLSearchParams(window.location.search).get('native') === '1';
@@ -34,22 +34,28 @@ let dbPromise;
 
 $('appPassword').value = '';
 const modeInputs = [...document.querySelectorAll('input[name=assistantMode]')];
+const taskModeInput = $('taskMode');
+taskModeInput.value = taskMode;
 function applyAssistantMode() {
   const isQureo = assistantMode === 'qureo';
+  const isTeam = taskMode === 'team' && !isQureo;
   modeInputs.forEach(input => { input.checked = input.value === assistantMode; });
   $('qureoAutoCard').style.display = isQureo && ANDROID_NATIVE ? 'block' : 'none';
   $('solutionLibraryCard').style.display = isQureo && ANDROID_NATIVE ? 'block' : 'none';
-  $('modePill').textContent = isQureo ? 'وضع QUREO' : 'مساعد عام';
-  $('introTitle').textContent = isQureo ? 'أهلًا، أنا مساعد QUREO الآمن.' : 'أهلًا، أنا Mohamed AI.';
-  $('introText').textContent = isQureo ? 'أرسل سؤال JavaScript أو Python أو صورة له. سأشرح لك، ولن أضغط إجابة إلا داخل الأنواع المدعومة وبعد تحقق محلي واضح.' : 'اسألني بالعربي عن الدراسة، البرمجة، الكتابة، الترجمة، التخطيط أو أي موضوع عام. أشرح بوضوح وأقول لك عندما لا أستطيع التحقق من معلومة.';
-  $('introLimit').textContent = isQureo ? 'لا أخمّن — إذا كان السؤال ملتبسًا أتوقف' : 'لا أختلق المعلومات — اطلب مصادر أو تحقق من الأمور المهمة';
-  $('questionLabel').textContent = isQureo ? 'سؤالك عن QUREO' : 'رسالتك';
-  $('question').placeholder = isQureo ? 'اكتب سؤال JavaScript أو Python أو قلّي الجزء غير الواضح…' : 'اكتب سؤالك أو اطلب مني مهمة…';
-  $('disclaimer').textContent = isQureo ? 'المحادثة تشرح فقط ولا تضغط الإجابة على QUREO. التشغيل الآلي محصور بالأنواع المدعومة.' : 'لا تضع كلمات المرور أو البيانات الحساسة في المحادثة.';
-  $('chatHeading').textContent = isQureo ? 'محادثة QUREO' : 'المحادثة';
-  $('welcomeLabel').textContent = isQureo ? 'مساعد QUREO' : 'Mohamed AI';
-  $('welcomeText').textContent = isQureo ? 'اسألني عن سؤال JavaScript أو Python، أو ارفع صورته. سأشرح لك وأطلب توضيحًا إذا التبس السؤال.' : 'اسألني عن أي موضوع؛ أقدر أساعدك في الشرح والكتابة والبرمجة والتخطيط.';
+  $('modePill').textContent = isQureo ? 'وضع QUREO' : (isTeam ? 'فريق التطبيقات' : 'مساعد عام');
+  $('introTitle').textContent = isQureo ? 'أهلًا، أنا مساعد QUREO الآمن.' : (isTeam ? 'فريقك الافتراضي لصناعة التطبيقات.' : 'أهلًا، أنا Mohamed AI.');
+  $('introText').textContent = isQureo ? 'أرسل سؤال JavaScript أو Python أو صورة له. سأشرح لك، ولن أضغط إجابة إلا داخل الأنواع المدعومة وبعد تحقق محلي واضح.' : (isTeam ? 'قائد يختار المختصين المناسبين. يمكن تشغيل MetaGPT لإنشاء مشروع في مساحة مستقلة، دون دمجه أو نشره.' : 'اسألني بالعربي عن الدراسة، البرمجة، الكتابة، الترجمة، التخطيط أو أي موضوع عام. أشرح بوضوح وأقول لك عندما لا أستطيع التحقق من معلومة.');
+  $('introLimit').textContent = isQureo ? 'لا أخمّن — إذا كان السؤال ملتبسًا أتوقف' : (isTeam ? 'شخصيات افتراضية؛ لا ادعاء بهوية بشرية' : 'لا أختلق المعلومات — اطلب مصادر أو تحقق من الأمور المهمة');
+  $('questionLabel').textContent = isQureo ? 'سؤالك عن QUREO' : (isTeam ? 'مهمة فريق التطبيقات' : 'رسالتك');
+  $('question').placeholder = isQureo ? 'اكتب سؤال JavaScript أو Python أو قلّي الجزء غير الواضح…' : (isTeam ? 'صف التطبيق المطلوب، المنصة، المستخدمين والميزات الأساسية…' : 'اكتب سؤالك أو اطلب مني مهمة…');
+  $('disclaimer').textContent = isQureo ? 'المحادثة تشرح فقط ولا تضغط الإجابة على QUREO. التشغيل الآلي محصور بالأنواع المدعومة.' : (isTeam ? 'لا ترسل مفاتيح أو كلمات مرور. أي مشروع مولّد يبقى منفصلًا حتى تختار تنزيله.' : 'لا تضع كلمات المرور أو البيانات الحساسة في المحادثة.');
+  $('chatHeading').textContent = isQureo ? 'محادثة QUREO' : (isTeam ? 'فريق التطبيقات' : 'المحادثة');
+  $('welcomeLabel').textContent = isQureo ? 'مساعد QUREO' : (isTeam ? 'قائد الفريق' : 'Mohamed AI');
+  $('welcomeText').textContent = isQureo ? 'اسألني عن سؤال JavaScript أو Python، أو ارفع صورته. سأشرح لك وأطلب توضيحًا إذا التبس السؤال.' : (isTeam ? 'صف فكرة التطبيق؛ ينسق القائد المختصين الافتراضيين بحسب المهمة.' : 'اسألني عن أي موضوع؛ أقدر أساعدك في الشرح والكتابة والبرمجة والتخطيط.');
   $('agentPermissions').style.display = taskMode === 'agent' && !isQureo ? 'block' : 'none';
+  $('teamOptions').style.display = isTeam ? 'block' : 'none';
+  $('teamModeOption').disabled = isQureo;
+  if (isQureo && taskMode === 'team') { taskMode = 'chat'; taskModeInput.value = 'chat'; localStorage.setItem(TASK_MODE_KEY, taskMode); }
   $('enginePicker').style.display = isQureo ? 'none' : 'block';
 }
 
@@ -60,6 +66,8 @@ const LOCAL_SKILLS = [
   ['summarization', 'التلخيص والاستخراج', 'محتوى', 'تلخيص واستخراج النقاط المهمة.'],
   ['tutoring', 'التعليم والشرح', 'تعليم', 'شرح خطوة بخطوة ومراجعة.'],
   ['coding', 'البرمجة ومراجعة الكود', 'برمجة', 'شرح وكتابة وتصحيح الكود.'],
+  ['app_team', 'فريق صناعة التطبيقات — CrewAI', 'بناء التطبيقات', 'تنسيق مختصين افتراضيين لإعداد خطة قابلة للمراجعة.'],
+  ['app_builder', 'إنشاء ملفات المشروع — MetaGPT', 'بناء التطبيقات', 'إنشاء اختياري داخل مساحة معزولة دون دمج أو نشر تلقائي.'],
   ['safe_calculator', 'الحساب الآمن', 'أدوات محلية', 'عمليات رياضية دون تنفيذ كود.'],
   ['date_time', 'الوقت والتاريخ', 'أدوات محلية', 'قراءة الوقت بصيغة UTC.'],
   ['planning', 'التخطيط والمهام', 'وكيل', 'خطة قصيرة وتحديد الموافقات.'],
@@ -78,7 +86,7 @@ const LOCAL_SKILLS = [
 function skillStateLabel(state) {
   return { available: 'متاحة', configured: 'مهيأة', needs_setup: 'إعداد مطلوب', optional: 'اختيارية', disabled: 'متوقفة' }[state] || 'متاحة';
 }
-function renderSkills(skills = LOCAL_SKILLS.map(([id, name, category, description]) => ({ id, name, category, description, state: ['github_read', 'drive_read', 'gmail_read', 'calendar_read', 'web_search', 'image_analysis'].includes(id) ? 'needs_setup' : (id === 'local_inference' ? 'optional' : 'available') }))) {
+function renderSkills(skills = LOCAL_SKILLS.map(([id, name, category, description]) => ({ id, name, category, description, state: ['github_read', 'drive_read', 'gmail_read', 'calendar_read', 'web_search', 'image_analysis', 'app_team', 'app_builder'].includes(id) ? 'needs_setup' : (id === 'local_inference' ? 'optional' : 'available') }))) {
   const grid = $('skillsGrid');
   if (!grid) return;
   grid.replaceChildren();
@@ -123,9 +131,7 @@ openManusToggle.addEventListener('change', () => {
   if (openManusToggle.checked && imageData) setStatus('OpenManus في هذا الإصدار يقبل النص فقط؛ أزل الصورة أو أوقف الخيار.', true);
 });
 $('clearPassword').addEventListener('click', () => { $('appPassword').value = ''; });
-const taskModeInput = $('taskMode');
-taskModeInput.value = taskMode;
-taskModeInput.addEventListener('change', () => { taskMode = taskModeInput.value; localStorage.setItem(TASK_MODE_KEY, taskMode); $('agentPermissions').style.display = taskMode === 'agent' && assistantMode !== 'qureo' ? 'block' : 'none'; });
+taskModeInput.addEventListener('change', () => { taskMode = taskModeInput.value; localStorage.setItem(TASK_MODE_KEY, taskMode); applyAssistantMode(); });
 const agentPermissionInputs = [...document.querySelectorAll('input[name=agentPermission]')];
 let agentPermissions = (() => { try { const saved = JSON.parse(localStorage.getItem(AGENT_PERMISSIONS_KEY) || 'null'); return Array.isArray(saved) ? saved : DEFAULT_AGENT_PERMISSIONS; } catch { return DEFAULT_AGENT_PERMISSIONS; } })();
 agentPermissionInputs.forEach(input => {
@@ -225,15 +231,16 @@ $('clearSolutionLibraryBtn').addEventListener('click', () => {
 });
 if (ANDROID_NATIVE) refreshSolutionLibraryCount();
 
-function solveEndpoint(useOpenManus = false) {
+function solveEndpoint(useOpenManus = false, useTeam = false) {
   const base = $('serverBaseUrl')?.value.trim() || '';
-  if (!base) return ANDROID_NATIVE ? null : (useOpenManus ? '/api/openmanus' : '/api/solve');
+  const route = useTeam ? '/api/team' : (useOpenManus ? '/api/openmanus' : '/api/solve');
+  if (!base) return ANDROID_NATIVE ? null : route;
   let parsed;
   try { parsed = new URL(base); } catch { throw new Error('أدخل عنوانًا صحيحًا يبدأ بـ https://.'); }
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
     throw new Error('استخدم عنوان خادم HTTPS فقط، من دون مسار أو بيانات دخول داخل الرابط.');
   }
-  return `${parsed.origin}${useOpenManus ? '/api/openmanus' : '/api/solve'}`;
+  return `${parsed.origin}${route}`;
 }
 
 function setStatus(text, isError = false) {
@@ -450,6 +457,38 @@ function setAnswer(text, source) {
   chatTranscript.scrollTop = chatTranscript.scrollHeight;
 }
 
+function addProjectDownload(projectId, projectName) {
+  if (!/^[a-f0-9]{32}$/.test(String(projectId || ''))) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'secondary';
+  button.textContent = `تنزيل ${String(projectName || 'ملفات المشروع').slice(0, 80)} كملف ZIP`;
+  button.style.marginTop = '8px';
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try {
+      const base = $('serverBaseUrl')?.value.trim() || '';
+      let endpoint = `/api/team/artifacts/${encodeURIComponent(projectId)}`;
+      if (base) endpoint = `${new URL(base).origin}${endpoint}`;
+      const headers = {};
+      const password = $('appPassword').value.trim();
+      if (password) headers.Authorization = `Bearer ${password}`;
+      const response = await fetch(endpoint, { headers });
+      if (!response.ok) throw new Error('تعذّر تنزيل ملف المشروع.');
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'mohamed-ai-project.zip';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+    } catch (error) { setStatus(error.message || 'تعذّر تنزيل ملف المشروع.', true); }
+    finally { button.disabled = false; }
+  });
+  chatTranscript.append(button);
+  chatTranscript.scrollTop = chatTranscript.scrollHeight;
+}
+
 let latestAssistantAnswer = '';
 const chatHistory = [];
 
@@ -529,7 +568,8 @@ async function runTask(task) {
   const text = String(task.question || '').trim();
   const image = task.image || '';
   if (!text && !image) { setStatus('اكتب السؤال أو أرفق صورة أولًا.', true); return; }
-  const requestQuestion = questionWithConversation(text, image);
+  const useTeam = assistantMode === 'general' && taskMode === 'team';
+  const requestQuestion = useTeam ? text : questionWithConversation(text, image);
 
   const localPrepareWasDisabled = $('prepareLocalBtn').disabled;
   const finishRun = () => {
@@ -553,35 +593,38 @@ async function runTask(task) {
   rememberChatEntry('user', userMessage);
 
   let cloudFailure = '';
-  const useOpenManus = assistantMode === 'general' && openManusToggle.checked;
-  setStatus(useOpenManus ? 'أرسل الطلب إلى خدمة OpenManus على خادمك…' : (ANDROID_NATIVE && !$('serverBaseUrl').value.trim()
+  const useOpenManus = !useTeam && assistantMode === 'general' && openManusToggle.checked;
+  setStatus(useTeam ? 'أرسل المهمة إلى فريق التطبيقات…' : (useOpenManus ? 'أرسل الطلب إلى خدمة OpenManus على خادمك…' : (ANDROID_NATIVE && !$('serverBaseUrl').value.trim()
     ? 'لم يُضبط خادم سحابي؛ سأجرّب النموذج المحلي إن كان جاهزًا…'
-    : 'أحاول مزوّد Mohamed AI السحابي…'));
+    : 'أحاول مزوّد Mohamed AI السحابي…')));
   try {
     if (useOpenManus && image) throw new Error('OpenManus هنا يدعم النص فقط؛ أزل الصورة أو أوقف اختيار OpenManus.');
-    const endpoint = solveEndpoint(useOpenManus);
+    if (useTeam && image) throw new Error('وضع فريق التطبيقات يقبل وصفًا نصيًا حاليًا؛ أزل الصورة وأرسل تفاصيل المشروع كتابةً.');
+    const endpoint = solveEndpoint(useOpenManus, useTeam);
     if (!endpoint) throw new Error('لم يُضبط عنوان خادم سحابي.');
     const headers = { 'Content-Type': 'application/json' };
     const password = $('appPassword').value.trim();
     if (password) headers.Authorization = `Bearer ${password}`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), useOpenManus ? 110000 : 85000);
+    const timer = setTimeout(() => controller.abort(), useTeam ? 600000 : (useOpenManus ? 110000 : 85000));
     let response;
     try {
       response = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode, responseStyle, taskMode, agentPermissions }),
+        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode, responseStyle, taskMode, agentPermissions, buildProject: useTeam && $('teamBuildToggle').checked }),
         signal: controller.signal,
       });
     } finally { clearTimeout(timer); }
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'تعذّر الحل السحابي.');
     await removeTask();
-    const providerNames = { gemini: 'Gemini', groq: 'Groq', mock: 'وضع المعاينة', openmanus: 'OpenManus' };
+    const providerNames = { gemini: 'Gemini', groq: 'Groq', mock: 'وضع المعاينة', openmanus: 'OpenManus', 'app-team': 'فريق التطبيقات' };
     const provider = providerNames[result.provider] || 'السحابة';
-    setAnswer(result.answer || 'لم يصل شرح من النموذج.', `المعالجة عبر ${provider}${result.fallbackUsed ? ' بعد تعذّر المزود الأساسي' : ''}.`);
-    setStatus('جهزت الإجابة المقترحة. راجع الشرح واختر بنفسك على QUREO.');
+    const answer = result.answer || 'لم يصل شرح من النموذج.';
+    setAnswer(answer, `المعالجة عبر ${provider}${result.fallbackUsed ? ' بعد تعذّر المزود الأساسي' : ''}.`);
+    if (result.project?.id) addProjectDownload(result.project.id, result.project.name || 'مشروع MetaGPT');
+    setStatus(useTeam ? 'اكتمل عمل الفريق. راجع الناتج؛ ملفات المشروع تبقى منفصلة حتى تختار تنزيلها.' : 'جهزت الإجابة المقترحة. راجع الشرح واختر بنفسك على QUREO.');
     finishRun();
     return;
   } catch (error) {
@@ -590,7 +633,7 @@ async function runTask(task) {
       : (error.message || 'تعذّر الاتصال بالخادم.');
   }
 
-  const canTryLocal = localIsPrepared() || QureoLocal.isReady();
+  const canTryLocal = !useTeam && (localIsPrepared() || QureoLocal.isReady());
   if (canTryLocal && !image) {
     try {
       setStatus(`${cloudFailure} أجرّب الآن النموذج المحلي على الهاتف…`);

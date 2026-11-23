@@ -11,6 +11,12 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, 'public');
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const DEFAULT_GROQ_MODEL = 'qwen/qwen3.8-27b';
+const TEAM_ROLE_LABELS = {
+  leader: 'قائد الفريق', product: 'خبير المنتج', architecture: 'مهندس المعمارية', design: 'مصمم UX/UI',
+  frontend: 'مهندس الواجهة الأمامية', backend: 'مهندس الواجهة الخلفية', mobile: 'مهندس تطبيقات الهاتف',
+  data: 'مهندس البيانات وقواعدها', ai_ml: 'مهندس الذكاء الاصطناعي', qa: 'مهندس الاختبار والجودة',
+  security: 'مهندس الأمن والخصوصية', devops: 'مهندس السحابة وDevOps', docs: 'مختص التوثيق الفني',
+};
 const SYSTEM_PROMPT = [
   'أنت معلّم برمجة عربي صبور، متخصص في أسئلة JavaScript وPython الظاهرة في QUREO. هدفك أن يفهم الطالب، لا أن تحلّ بدلًا منه.',
   'إذا كان السؤال خارج QUREO أو خارج البرمجة، وضّح باختصار أن دورك هنا هو مساعدة الطالب في أسئلة QUREO فقط.',
@@ -515,6 +521,39 @@ function googleDriveFileId(value) {
   return id;
 }
 
+function privateServiceOrigin(raw, label, allowHttp = false) {
+  let target;
+  try { target = new URL(raw); } catch { throw Object.assign(new Error(`${label} URL is invalid`), { status: 503 }); }
+  const localHost = ['localhost', '127.0.0.1', '::1'].includes(target.hostname);
+  if (target.username || target.password || target.search || target.hash || !['', '/'].includes(target.pathname)
+      || (target.protocol !== 'https:' && !(target.protocol === 'http:' && (localHost || allowHttp)))) {
+    throw Object.assign(new Error(`${label} URL must be HTTPS, or explicitly allow private HTTP`), { status: 503 });
+  }
+  return target.origin;
+}
+
+async function boundedServiceRequest({ fetchImpl, url, token, body, timeoutMs, maxBytes = 100_000 }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: controller.signal,
+    });
+    const contentLength = Number(response.headers?.get?.('content-length') || 0);
+    if (contentLength > maxBytes) throw Object.assign(new Error('Service response too large'), { status: 413 });
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > maxBytes) throw Object.assign(new Error('Service response too large'), { status: 413 });
+    return { response, bytes };
+  } catch (error) {
+    if (error.status) throw error;
+    if (error.name === 'AbortError') throw Object.assign(new Error('Service request timed out'), { status: 504 });
+    throw Object.assign(new Error('Service request failed'), { status: 502 });
+  } finally { clearTimeout(timer); }
+}
+
 async function webSearchRequest({ fetchImpl, apiKey, query, count = 5 }) {
   const endpoint = `https://api.bing.microsoft.com/v7.0/search?q=${encodeURIComponent(query)}&count=${count}&safeSearch=Strict&textDecorations=false&textFormat=Raw`;
   const response = await fetchWithTimeout(fetchImpl, endpoint, {
@@ -591,10 +630,11 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
       }
       return sendApi(200, {
         ok: true,
-        mockMode,
-        passwordRequired: Boolean(appPassword),
-        providers: { openmanus: Boolean(env.OPENMANUS_URL && env.OPENMANUS_TOKEN), gemini: providers.some(p => p.name === 'gemini'), groq: providers.some(p => p.name === 'groq'), ...Object.fromEntries(providers.filter(p => !['gemini', 'groq'].includes(p.name)).map(p => [p.name, true])), order: providers.map(p => p.name) },
-      });
+          mockMode,
+          passwordRequired: Boolean(appPassword),
+          providers: { openmanus: Boolean(env.OPENMANUS_URL && env.OPENMANUS_TOKEN), gemini: providers.some(p => p.name === 'gemini'), groq: providers.some(p => p.name === 'groq'), ...Object.fromEntries(providers.filter(p => !['gemini', 'groq'].includes(p.name)).map(p => [p.name, true])), order: providers.map(p => p.name) },
+          services: { crewai: Boolean(env.TEAM_SERVICE_URL && env.TEAM_SERVICE_TOKEN), metagpt: Boolean(env.METAGPT_SERVICE_URL && env.METAGPT_SERVICE_TOKEN) },
+        });
     }
 
     if (url.pathname === '/api/capabilities' && req.method === 'GET') {
@@ -797,6 +837,85 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, logger 
       } catch (error) {
         const timedOut = error.name === 'AbortError';
         return sendApi(timedOut ? 504 : (error instanceof SyntaxError ? 400 : 502), { error: timedOut ? 'انتهت مهلة OpenManus؛ جرّب طلبًا أقصر.' : (error instanceof SyntaxError ? 'تعذّر قراءة الطلب.' : 'تعذّر الاتصال بخدمة OpenManus.'), code: timedOut ? 'OPENMANUS_TIMEOUT' : 'OPENMANUS_UNAVAILABLE' });
+      }
+    }
+
+    if (url.pathname === '/api/team' && req.method === 'POST') {
+      if (!allowRequest(req.socket.remoteAddress || 'unknown')) return sendApi(429, { error: 'طلبات كثيرة؛ انتظر دقيقة ثم أعد المحاولة.', code: 'RATE_LIMITED' });
+      if (!isAuthorized(req, appPassword)) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      try {
+        const body = JSON.parse(await readBody(req, 30_000) || '{}');
+        if (body.image) return sendApi(415, { error: 'فريق التطبيقات يقبل وصفًا نصيًا حاليًا.', code: 'TEAM_TEXT_ONLY' });
+        const question = String(body.question || '').trim();
+        if (!question) return sendApi(400, { error: 'اكتب وصف التطبيق أو المهمة أولًا.', code: 'EMPTY_QUESTION' });
+        if (question.length > 12_000) return sendApi(413, { error: 'وصف التطبيق طويل جدًا.', code: 'QUESTION_TOO_LONG' });
+        if (mockMode) return sendApi(200, { answer: 'وضع المعاينة فقط: لم يُرسل الطلب إلى CrewAI أو MetaGPT، ولم تُنشأ أي ملفات.', provider: 'mock', team: [], project: null, fallbackUsed: false });
+        if (!env.TEAM_SERVICE_URL || !env.TEAM_SERVICE_TOKEN) return sendApi(503, { error: 'خدمة CrewAI غير مهيأة على الخادم.', code: 'TEAM_NOT_CONFIGURED' });
+        const crewOrigin = privateServiceOrigin(env.TEAM_SERVICE_URL, 'CrewAI', env.TEAM_SERVICE_ALLOW_HTTP === '1');
+        const buildRequested = body.buildProject === true;
+        if (buildRequested && question.length > 8_000) return sendApi(413, { error: 'اختصر وصف المشروع إلى 8,000 حرف كحد أقصى عند إنشاء الملفات؛ ستُضاف إليه خلاصة خطة الفريق.', code: 'METAGPT_IDEA_TOO_LONG' });
+        if (buildRequested && (!env.METAGPT_SERVICE_URL || !env.METAGPT_SERVICE_TOKEN)) return sendApi(503, { error: 'خيار إنشاء الملفات مفعّل لكن خدمة MetaGPT غير مهيأة. لم يبدأ إرسال الطلب.', code: 'METAGPT_NOT_CONFIGURED' });
+        const metaOrigin = buildRequested ? privateServiceOrigin(env.METAGPT_SERVICE_URL, 'MetaGPT', env.METAGPT_SERVICE_ALLOW_HTTP === '1') : '';
+        const crewResult = await boundedServiceRequest({
+          fetchImpl, url: new URL('/run', crewOrigin), token: env.TEAM_SERVICE_TOKEN,
+          body: { prompt: question }, timeoutMs: Math.min(180_000, Math.max(5_000, Number(env.TEAM_TIMEOUT_MS || 120_000))), maxBytes: 1_000_000,
+        });
+        const crewBody = JSON.parse(crewResult.bytes.toString('utf8') || '{}');
+        if (!crewResult.response.ok) return sendApi(crewResult.response.status >= 500 ? 502 : crewResult.response.status, { error: 'تعذّر على فريق CrewAI تنسيق المهمة.', code: 'TEAM_COORDINATION_FAILED' });
+        const team = Array.isArray(crewBody.team) ? crewBody.team.slice(0, 6).map(member => ({
+          id: String(member?.id || '').slice(0, 40),
+          display_name: String(member?.display_name || '').replace(/[\r\n\x00-\x1f]/g, ' ').slice(0, 60),
+          role: String(member?.role || '').replace(/[\r\n\x00-\x1f]/g, ' ').slice(0, 80),
+        })) : [];
+        const output = String(crewBody.output || '').trim().slice(0, 24_000);
+        if (!output) return sendApi(502, { error: 'لم يُرجع فريق CrewAI خطة نصية.', code: 'TEAM_EMPTY_RESPONSE' });
+        const teamNames = team.filter(member => member.display_name).map(member => `${member.display_name} — ${TEAM_ROLE_LABELS[member.id] || 'مختص افتراضي'}`);
+        const answer = `${teamNames.length ? `الأعضاء الافتراضيون المختارون:\n${teamNames.map(name => `• ${name}`).join('\n')}\n\n` : ''}${output}`;
+        let project;
+        if (buildRequested) {
+          const buildResult = await boundedServiceRequest({
+            fetchImpl, url: new URL('/build', metaOrigin), token: env.METAGPT_SERVICE_TOKEN,
+            body: { idea: `طلب المستخدم:\n${question}\n\nخلاصة خطة فريق CrewAI:\n${output.slice(0, 1_500)}` }, timeoutMs: Math.min(1_800_000, Math.max(30_000, Number(env.METAGPT_TIMEOUT_MS || 600_000))), maxBytes: 1_000_000,
+          });
+          const buildBody = JSON.parse(buildResult.bytes.toString('utf8') || '{}');
+          if (!buildResult.response.ok) return sendApi(buildResult.response.status >= 500 ? 502 : buildResult.response.status, { error: 'تعذّر إنشاء ملفات المشروع في مساحة MetaGPT المعزولة.', code: 'METAGPT_BUILD_FAILED' });
+          const projectId = String(buildBody.projectId || '');
+          if (!/^[a-f0-9]{32}$/.test(projectId)) return sendApi(502, { error: 'أعادت خدمة MetaGPT معرّف مشروع غير صالح.', code: 'METAGPT_INVALID_PROJECT' });
+          project = {
+            id: projectId,
+            name: 'مشروع التطبيقات',
+            manifest: Array.isArray(buildBody.manifest) ? buildBody.manifest.slice(0, 200).map(file => ({ path: String(file.path || '').slice(0, 200), size_bytes: Math.max(0, Number(file.size_bytes) || 0) })) : [],
+          };
+        }
+        return sendApi(200, {
+          answer: answer + (project ? '\n\nأُنشئت ملفات المشروع في مساحة MetaGPT المعزولة. لم تُدمج أو تُنشر؛ نزّل الأرشيف وراجعه قبل أي استخدام.' : ''),
+          provider: 'app-team', team,
+          project, fallbackUsed: false,
+        });
+      } catch (error) {
+        if (res.headersSent || res.destroyed) return;
+        if (error instanceof SyntaxError) return sendApi(400, { error: 'تعذّر قراءة طلب الفريق أو استجابته.', code: 'TEAM_INVALID_JSON' });
+        return sendApi(error.status || 502, { error: error.status === 504 ? 'انتهت مهلة خدمة الفريق. جرّب وصفًا أقصر.' : 'تعذّر الاتصال بخدمة فريق التطبيقات.', code: error.status === 504 ? 'TEAM_TIMEOUT' : 'TEAM_UNAVAILABLE' });
+      }
+    }
+
+    const teamArtifactMatch = url.pathname.match(/^\/api\/team\/artifacts\/([a-f0-9]{32})$/);
+    if (teamArtifactMatch && req.method === 'GET') {
+      if (!isAuthorized(req, appPassword)) return sendApi(401, { error: 'كلمة مرور الأداة غير صحيحة.', code: 'APP_PASSWORD_REQUIRED' });
+      if (!env.METAGPT_SERVICE_URL || !env.METAGPT_SERVICE_TOKEN) return sendApi(503, { error: 'خدمة MetaGPT غير مهيأة على الخادم.', code: 'METAGPT_NOT_CONFIGURED' });
+      try {
+        const metaOrigin = privateServiceOrigin(env.METAGPT_SERVICE_URL, 'MetaGPT', env.METAGPT_SERVICE_ALLOW_HTTP === '1');
+        const maxBytes = Math.min(100 * 1024 * 1024, Math.max(1024, Number(env.MAX_TEAM_ARCHIVE_BYTES || 100 * 1024 * 1024)));
+        const result = await boundedServiceRequest({
+          fetchImpl, url: new URL(`/artifact/${teamArtifactMatch[1]}`, metaOrigin), token: env.METAGPT_SERVICE_TOKEN,
+          timeoutMs: Math.min(120_000, Math.max(5_000, Number(env.TEAM_ARTIFACT_TIMEOUT_MS || 60_000))), maxBytes,
+        });
+        if (!result.response.ok) return sendApi(result.response.status >= 500 ? 502 : result.response.status, { error: 'تعذّر تنزيل أرشيف المشروع.', code: 'TEAM_ARTIFACT_FAILED' });
+        res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${teamArtifactMatch[1]}.zip"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...SECURITY_HEADERS, ...androidCors });
+        return res.end(result.bytes);
+      } catch (error) {
+        if (res.headersSent || res.destroyed) return;
+        return sendApi(error.status || 502, { error: 'تعذّر تنزيل ملف المشروع.', code: error.status === 413 ? 'TEAM_ARCHIVE_TOO_LARGE' : 'TEAM_ARTIFACT_FAILED' });
       }
     }
 

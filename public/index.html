@@ -153,7 +153,7 @@
         <label class="track-option"><input type="radio" name="assistantMode" value="general" checked> مساعد عام</label>
         <label class="track-option"><input type="radio" name="assistantMode" value="qureo"> QUREO</label>
       </div>
-      <p class="note">الوضع العام يجيب عن الأسئلة المتنوعة. وضع AI Agent يخطط وينفذ الخطوات المسموح بها بعد موافقتك. وضع QUREO يفعّل أدوات الدراسة والتشغيل الآلي المحدود فقط داخل QUREO.</p>
+      <p class="note">الوضع العام يجيب عن الأسئلة المتنوعة. وضع AI Agent يساعد على التخطيط. فريق صناعة التطبيقات ينسق مختصين افتراضيين، ويتيح إنشاء ملفات منفصلة عبر MetaGPT عند تهيئته. وضع QUREO يفعّل أدوات الدراسة والتشغيل الآلي المحدود فقط داخل QUREO.</p>
       <div id="enginePicker" style="margin-top:10px;padding:10px 11px;border:1px solid #dfe6f2;border-radius:12px;background:#f8faff">
         <strong style="font-size:12px">محرك المساعد العام</strong>
         <label class="cache-toggle"><input id="openManusToggle" type="checkbox"> OpenManus — وكيل عام اختياري (يتطلب تشغيل الخدمة على الخادم)</label>
@@ -164,7 +164,13 @@
         <option value="chat">محادثة وإجابة</option>
         <option value="task">تنفيذ مهمة بخطة</option>
         <option value="agent">AI Agent — وكيل ذكي</option>
+        <option id="teamModeOption" value="team">فريق صناعة التطبيقات — CrewAI + MetaGPT</option>
       </select>
+      <div id="teamOptions" style="display:none;margin-top:10px;padding:10px 11px;border:1px solid #dfe6f2;border-radius:12px;background:#f8faff">
+        <strong style="font-size:12px">فريق افتراضي متخصص</strong>
+        <p class="note">يقسم قائد الفريق الطلب على مختصين افتراضيين. لا يدّعي أي عضو أنه شخص حقيقي، ولا نعرض هوية مزوّد النموذج.</p>
+        <label class="cache-toggle"><input id="teamBuildToggle" type="checkbox"> أنشئ ملفات مشروع في مساحة معزولة عبر MetaGPT (لن تُدمج أو تُنشر تلقائيًا)</label>
+      </div>
       <label class="label" for="responseStyle">أسلوب الرد</label>
       <select id="responseStyle" style="width:100%;border:1px solid #d8dfeb;border-radius:12px;padding:11px 12px;background:#fff;color:var(--ink);min-height:46px">
         <option value="balanced">متوازن وواضح</option>

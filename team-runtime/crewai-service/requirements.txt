@@ -1,0 +1,2 @@
+# CrewAI documents these imports and core APIs; keep install reproducible within 1.x.
+crewai>=1.15,<2

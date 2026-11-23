@@ -1,8 +1,8 @@
 {
   "name": "qureo-study-helper",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
-  "description": "Arabic mobile-first general assistant with a safe QUREO mode, cloud fallback and optional local inference",
+  "description": "Arabic mobile-first general assistant with safe QUREO mode, optional local inference and an isolated virtual app team",
   "scripts": {
     "start": "node server.js",
     "preview": "MOCK_MODE=1 node server.js",

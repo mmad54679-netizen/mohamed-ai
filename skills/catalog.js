@@ -5,6 +5,8 @@ const SKILL_DEFINITIONS = [
   { id: 'summarization', name: 'التلخيص والاستخراج', category: 'محتوى', description: 'تلخيص المحادثات والوثائق واستخراج النقاط المهمة.', kind: 'built_in', enabled: true, readOnly: true },
   { id: 'tutoring', name: 'التعليم والشرح', category: 'تعليم', description: 'شرح المفاهيم خطوة بخطوة وطرح أسئلة للمراجعة.', kind: 'built_in', enabled: true, readOnly: true },
   { id: 'coding', name: 'البرمجة ومراجعة الكود', category: 'برمجة', description: 'شرح وكتابة ومراجعة وتصحيح أمثلة برمجية.', kind: 'built_in', enabled: true, readOnly: true },
+  { id: 'app_team', name: 'فريق صناعة التطبيقات — CrewAI', category: 'بناء التطبيقات', description: 'قائد افتراضي يختار مختصين ويقدم خطة مراجعة؛ لا ينفذ الملفات بنفسه.', kind: 'team_service', enabled: true, readOnly: true },
+  { id: 'app_builder', name: 'إنشاء ملفات المشروع — MetaGPT', category: 'بناء التطبيقات', description: 'إنشاء اختياري في مساحة معزولة؛ التنزيل لا يدمج أو ينشر الملفات.', kind: 'builder_service', enabled: true, readOnly: true },
   { id: 'safe_calculator', name: 'الحساب الآمن', category: 'أدوات محلية', description: 'حساب العمليات الرياضية المسموحة دون تنفيذ كود عشوائي.', kind: 'local_tool', permission: 'calculator', enabled: true, readOnly: true },
   { id: 'date_time', name: 'الوقت والتاريخ', category: 'أدوات محلية', description: 'قراءة الوقت والتاريخ بصيغة UTC من الجهاز/الخادم.', kind: 'local_tool', permission: 'date_time', enabled: true, readOnly: true },
   { id: 'planning', name: 'التخطيط والمهام', category: 'وكيل', description: 'تحويل الهدف إلى خطوات قصيرة وتحديد ما يحتاج موافقة.', kind: 'agent', permission: 'planning', enabled: true, readOnly: true },
@@ -30,6 +32,12 @@ function skillStatus(env = process.env, connectors = []) {
     if (skill.kind === 'connector') {
       state = connector?.available ? 'configured' : 'needs_setup';
       reason = connector?.available ? 'مهيأ على الخادم' : 'يحتاج توكن/مفتاحًا على الخادم';
+    } else if (skill.kind === 'team_service') {
+      state = env.TEAM_SERVICE_URL && env.TEAM_SERVICE_TOKEN ? 'configured' : 'needs_setup';
+      reason = state === 'configured' ? 'CrewAI مهيأ على الخادم؛ يختار المختصين حسب كلمات الطلب' : 'يتطلب تشغيل خدمة CrewAI وإعداد عنوانها ورمزها';
+    } else if (skill.kind === 'builder_service') {
+      state = env.METAGPT_SERVICE_URL && env.METAGPT_SERVICE_TOKEN ? 'configured' : 'needs_setup';
+      reason = state === 'configured' ? 'MetaGPT مهيأ؛ إنشاء الملفات اختياري ومنفصل' : 'يتطلب خدمة MetaGPT المعزولة وPython 3.11 داخل الحاوية';
     } else if (skill.kind === 'model_dependent') {
       state = env.GEMINI_API_KEY || env.GROQ_API_KEY ? 'available' : 'needs_setup';
       reason = state === 'available' ? 'يعتمد على مزود النموذج' : 'يحتاج مزود نموذج مضبوطًا';
