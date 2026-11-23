@@ -62,6 +62,44 @@ test('successful Gemini response does not call Groq', async () => {
   });
 });
 
+test('requested factuality review receives the proposed answer and reports completion accurately', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    const payload = JSON.parse(options.body);
+    const prompt = payload.contents[0].parts[0].text;
+    requests.push({ url: String(url), prompt });
+    return jsonResponse(200, { candidates: [{ content: { parts: [{ text: requests.length === 1 ? 'الإجابة الأصلية المبدئية' : 'إجابة مراجعة أكثر تحفظًا مع توضيح عدم اليقين' }] } }] });
+  };
+  await withServer({ env: { GEMINI_API_KEY: 'TEST_GEMINI_KEY' }, fetchImpl }, async base => {
+    const response = await fetch(`${base}/api/solve`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ ...testBody, selfCheck: true }) });
+    const result = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(requests.length, 2);
+    assert.match(requests[1].prompt, /أنت مراجع مستقل/);
+    assert.match(requests[1].prompt, /الإجابة الأصلية المبدئية/);
+    assert.equal(result.selfCheckRequested, true);
+    assert.equal(result.selfChecked, true);
+    assert.match(result.answer, /أكثر تحفظًا/);
+  });
+});
+
+test('failed factuality review preserves the draft and warns the user instead of claiming it was checked', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    if (calls === 1) return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'إجابة أولية تحتاج تحققًا إضافيًا' }] } }] });
+    return jsonResponse(503, { error: { message: 'stubbed reviewer unavailable' } });
+  };
+  await withServer({ env: { GEMINI_API_KEY: 'TEST_GEMINI_KEY' }, fetchImpl }, async base => {
+    const response = await fetch(`${base}/api/solve`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ ...testBody, selfCheck: true }) });
+    const result = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(result.selfCheckRequested, true);
+    assert.equal(result.selfChecked, false);
+    assert.match(result.answer, /لم تكتمل المراجعة الآلية/);
+  });
+});
+
 test('mock mode returns a local preview and never invokes a provider', async () => {
   let calls = 0;
   await withServer({ env: { MOCK_MODE: '1' }, fetchImpl: async () => { calls += 1; throw new Error('should not be called'); } }, async base => {
@@ -135,6 +173,9 @@ test('static pages receive a restrictive CSP and anti-framing headers', async ()
     assert.match(csp, /object-src 'none'/);
     assert.equal(response.headers.get('x-frame-options'), 'DENY');
     assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
-    assert.match(await response.text(), /http-equiv="Content-Security-Policy"/);
+    const html = await response.text();
+    assert.match(html, /http-equiv="Content-Security-Policy"/);
+    assert.match(html, /id="answerCheckToggle" type="checkbox" checked/);
+    assert.match(html, /لا يضمن صحة كل معلومة/);
   });
 });

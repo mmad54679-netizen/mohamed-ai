@@ -612,7 +612,7 @@ async function runTask(task) {
       response = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode, responseStyle, taskMode, agentPermissions, buildProject: useTeam && $('teamBuildToggle').checked }),
+        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode, responseStyle, taskMode, agentPermissions, selfCheck: !useTeam && $('answerCheckToggle').checked, buildProject: useTeam && $('teamBuildToggle').checked }),
         signal: controller.signal,
       });
     } finally { clearTimeout(timer); }
@@ -622,7 +622,8 @@ async function runTask(task) {
     const providerNames = { gemini: 'Gemini', groq: 'Groq', mock: 'وضع المعاينة', openmanus: 'OpenManus', 'app-team': 'فريق التطبيقات' };
     const provider = providerNames[result.provider] || 'السحابة';
     const answer = result.answer || 'لم يصل شرح من النموذج.';
-    setAnswer(answer, `المعالجة عبر ${provider}${result.fallbackUsed ? ' بعد تعذّر المزود الأساسي' : ''}.`);
+    const reviewLabel = result.selfCheckRequested ? (result.selfChecked ? ' مراجعة آلية إضافية أُجريت؛ لا تضمن الصحة.' : ' لم تكتمل المراجعة الآلية الإضافية.') : '';
+    setAnswer(answer, `المعالجة عبر ${provider}${result.fallbackUsed ? ' بعد تعذّر المزود الأساسي' : ''}.${reviewLabel}`);
     if (result.project?.id) addProjectDownload(result.project.id, result.project.name || 'مشروع MetaGPT');
     setStatus(useTeam ? 'اكتمل عمل الفريق. راجع الناتج؛ ملفات المشروع تبقى منفصلة حتى تختار تنزيلها.' : 'جهزت الإجابة المقترحة. راجع الشرح واختر بنفسك على QUREO.');
     finishRun();
@@ -639,7 +640,7 @@ async function runTask(task) {
       setStatus(`${cloudFailure} أجرّب الآن النموذج المحلي على الهاتف…`);
       const answer = await QureoLocal.generate(requestQuestion, updateLocalInfo);
       await removeTask();
-      setAnswer(answer, 'أُنتج الشرح على الهاتف دون إرسال نص السؤال إلى خدمة سحابية. النموذج صغير وقد يخطئ؛ تحقّق من الإجابة.');
+      setAnswer(answer, 'أُنتج الشرح على الهاتف دون إرسال نص السؤال إلى خدمة سحابية. النموذج صغير وقد يخطئ، ولم تُجرَ مراجعة آلية ثانية؛ تحقّق من الإجابة.');
       setStatus('اكتمل الشرح المحلي.');
       finishRun();
       return;

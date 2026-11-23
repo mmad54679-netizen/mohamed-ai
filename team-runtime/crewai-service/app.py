@@ -102,7 +102,7 @@ def crew_output(prompt: str, selected: list[str], names: dict[str, str]) -> str:
         agents[key] = Agent(
             role=role, goal=goal,
             backstory=(f"You are an AI {role.lower()} with the user-selected display name {names[key]!r}. "
-                       "You are not a human and must not claim to be one. Provide planning advice only."),
+                       "You are not a human and must not claim to be one. Provide planning advice only. Never invent facts, versions, costs, sources, or completed work; label assumptions and unknowns explicitly."),
             llm=llm, tools=[], allow_delegation=False, allow_code_execution=False,
             max_iter=2, max_retry_limit=0, verbose=False,
         )
@@ -111,11 +111,12 @@ def crew_output(prompt: str, selected: list[str], names: dict[str, str]) -> str:
         if key == "leader":
             description = ("Plan a small, maintainable application from this user request. Identify the objective, "
                            "assumptions, major components, implementation sequence, and a few acceptance checks. "
-                           "Do not claim any work was actually performed. Respond in the user's language, using Arabic if the request is Arabic. Request: " + prompt)
+                           "Never invent current vendor capabilities, versions, prices, sources, or facts not supplied. Mark assumptions and unknowns clearly, ask for missing critical requirements instead of guessing, and do not claim any work was actually performed. Respond in the user's language, using Arabic if the request is Arabic. Request: " + prompt)
             expected = "A concise actionable application plan with ordered steps and assumptions."
         else:
             description = (f"For the user's application request, provide the most important {descriptions[key][0]} "
                            f"considerations. Be concrete and concise, then recommend any necessary adjustment to the plan. "
+                           f"Do not invent facts, versions, costs, or sources. Mark assumptions and uncertainty instead of guessing. "
                            f"Respond in the user's language, using Arabic if the request is Arabic. Request: {prompt}")
             expected = "A concise specialist contribution with concrete recommendations."
         tasks.append(Task(description=description, expected_output=expected, agent=agents[key]))
@@ -123,7 +124,9 @@ def crew_output(prompt: str, selected: list[str], names: dict[str, str]) -> str:
         description=("As the team coordinator, synthesize the preceding plan and specialist contributions into one "
                      "coherent, prioritized application plan. Resolve conflicts, list key assumptions and risks, and "
                      "identify which implementation work should be done first. Respond in the user's language, "
-                     "using Arabic if the request is Arabic. Do not claim the app has been built or deployed."),
+                     "using Arabic if the request is Arabic. Do not repeat unsupported claims as facts or invent sources, "
+                     "versions, costs, or test results. Separate confirmed requirements from assumptions and unknowns. "
+                     "Do not claim the app has been built or deployed."),
         expected_output="A concise, coherent, prioritized application plan that integrates all selected specialist contributions.",
         agent=agents["leader"],
     ))

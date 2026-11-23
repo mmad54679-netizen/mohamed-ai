@@ -1,6 +1,6 @@
 {
   "name": "qureo-study-helper",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "private": true,
   "description": "Arabic mobile-first general assistant with safe QUREO mode, optional local inference and an isolated virtual app team",
   "scripts": {

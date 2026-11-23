@@ -33,9 +33,32 @@ test('OpenManus proxy sends bounded prompt only with private bearer and returns 
     assert.equal(body.answer, 'إجابة تجريبية');
     assert.equal(request.url, 'http://127.0.0.1:8091/run');
     assert.equal(request.options.headers.Authorization, `Bearer ${TOKEN}`);
-    assert.equal(JSON.parse(request.options.body).prompt, 'TEST_ONLY_PROMPT');
+    assert.match(JSON.parse(request.options.body).prompt, /تعليمات الدقة/);
+    assert.match(JSON.parse(request.options.body).prompt, /TEST_ONLY_PROMPT/);
   });
 });
+
+test('OpenManus answers are reviewed by a configured Mohamed AI provider when requested', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push(String(url));
+    if (String(url).includes('generativelanguage.googleapis.com')) {
+      return response(200, { candidates: [{ content: { parts: [{ text: 'إجابة مراجعة آلية أكثر تحفظًا' }] } }] });
+    }
+    return response(200, { answer: 'OpenManus answer draft' });
+  };
+  const env = { OPENMANUS_URL: 'http://127.0.0.1:8091', OPENMANUS_TOKEN: TOKEN, GEMINI_API_KEY: 'TEST_GEMINI_KEY' };
+  await withServer({ env, fetchImpl }, async base => {
+    const r = await fetch(`${base}/api/openmanus`, { method: 'POST', headers, body: JSON.stringify({ question: 'TEST_ONLY_PROMPT', selfCheck: true }) });
+    const body = await r.json();
+    assert.equal(r.status, 200);
+    assert.deepEqual(calls, ['http://127.0.0.1:8091/run', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent']);
+    assert.equal(body.selfCheckRequested, true);
+    assert.equal(body.selfChecked, true);
+    assert.match(body.answer, /أكثر تحفظًا/);
+  });
+});
+
 test('OpenManus rejects unauthenticated, oversized, image, and insecure remote calls', async () => {
   let calls = 0;
   const env = { OPENMANUS_URL: 'http://127.0.0.1:8091', OPENMANUS_TOKEN: TOKEN };
