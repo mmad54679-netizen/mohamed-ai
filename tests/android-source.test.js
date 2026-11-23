@@ -53,8 +53,10 @@ test('launcher accurately limits automatic-solving claims and discloses model-er
 
 test('home screen is an Arabic conversational assistant limited to QUREO solving', () => {
   assert.match(html, /<html lang="ar" dir="rtl">/);
-  assert.match(html, /محادثة عربية لحل أسئلة QUREO فقط/);
-  assert.match(html, /محادثة حل أسئلة QUREO/);
+  assert.match(html, /مساعد عربي عام مع وضع QUREO آمن/);
+  assert.match(html, /value="general" checked/);
+  assert.match(html, /value="qureo"/);
+  assert.match(html, /id="openManusToggle"/);
   assert.match(html, /id="qureoUsername"/);
   assert.match(html, /id="qureoPassword"/);
   assert.match(html, /id="startQureoAutoBtn"/);
@@ -68,6 +70,7 @@ test('home screen is an Arabic conversational assistant limited to QUREO solving
 test('chat follows short conversational context in memory without persisting the transcript', () => {
   assert.match(launcher, /const chatHistory = \[\]/);
   assert.match(launcher, /chatHistory\.slice\(-4\)/);
-  assert.match(launcher, /if \(chatHistory\.length > 8\) chatHistory\.splice/);
-  assert.doesNotMatch(launcher, /localStorage\.(?:setItem|getItem)\([^\n]*chatHistory/i);
+  assert.match(launcher, /if \(chatHistory\.length > 20\) chatHistory\.splice/);
+  assert.match(launcher, /mohamedAiRememberChat/);
+  assert.match(launcher, /function persistChatMemory\(\)/);
 });

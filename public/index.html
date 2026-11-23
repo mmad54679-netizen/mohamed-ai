@@ -154,6 +154,11 @@
         <label class="track-option"><input type="radio" name="assistantMode" value="qureo"> QUREO</label>
       </div>
       <p class="note">الوضع العام يجيب عن الأسئلة المتنوعة. وضع AI Agent يخطط وينفذ الخطوات المسموح بها بعد موافقتك. وضع QUREO يفعّل أدوات الدراسة والتشغيل الآلي المحدود فقط داخل QUREO.</p>
+      <div id="enginePicker" style="margin-top:10px;padding:10px 11px;border:1px solid #dfe6f2;border-radius:12px;background:#f8faff">
+        <strong style="font-size:12px">محرك المساعد العام</strong>
+        <label class="cache-toggle"><input id="openManusToggle" type="checkbox"> OpenManus — وكيل عام اختياري (يتطلب تشغيل الخدمة على الخادم)</label>
+        <p class="note">عند تفعيله، يُرسل نص رسالتك إلى خدمة OpenManus المهيأة على خادمك. لا تُرسل الصورة في هذا الوضع بعد؛ أوقفه لتحليل الصور أو استخدم محرك Mohamed AI.</p>
+      </div>
       <label class="label" for="taskMode">طريقة المساعدة</label>
       <select id="taskMode" style="width:100%;border:1px solid #d8dfeb;border-radius:12px;padding:11px 12px;background:#fff;color:var(--ink);min-height:46px">
         <option value="chat">محادثة وإجابة</option>
@@ -191,7 +196,7 @@
         <span class="step" aria-hidden="true">١</span>
         <strong id="autoHeading">اربط حساب QUREO وابدأ الحل</strong>
       </div>
-      <p class="auto-note">بيانات الحساب تُستخدم لتسجيل الدخول إلى QUREO فقط، ولا تُرسل لمزوّد الذكاء الاصطناعي.</p>
+      <p class="auto-note">بيانات الحساب تُستخدم لتسجيل الدخول إلى QUREO فقط، ولا تُرسل لمزوّد الذكاء الاصطناعي. التشغيل الآلي محدود بأنواع وأسئلة وأزرار مدعومة، ولا يضمن إكمال كل الدروس. درجة الثقة أو التحقق النصي ليسا برهانًا على صحة الحل.</p>
       <label class="label" for="qureoUsername">اسم المستخدم أو كود الطالب</label>
       <input id="qureoUsername" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="اسم المستخدم في QUREO">
       <label class="label" for="qureoPassword">كلمة مرور QUREO</label>
@@ -243,7 +248,7 @@
         <button class="small-btn" id="clearChatBtn" type="button">مسح</button>
       </div>
       <div class="chat-log" id="chatTranscript" aria-live="polite" aria-relevant="additions text">
-        <div class="bubble assistant"><span class="bubble-label">مساعد QUREO</span>اسألني عن سؤال من JavaScript أو Python، أو ارفع صورته. هشرح لك الحل، ولو احتجت توضيحًا كمل كلامك هنا. المحادثة دي مؤقتة داخل الجلسة، وسياق آخر ٤ رسائل ممكن يروح لخادم المساعد مع سؤالك عشان أفهم المتابعة.</div>
+        <div class="bubble assistant"><span class="bubble-label" id="welcomeLabel">Mohamed AI</span><span id="welcomeText">اسألني عن أي موضوع؛ أقدر أساعدك في الشرح والكتابة والبرمجة والتخطيط.</span></div>
       </div>
       <div class="composer">
         <label class="label" id="questionLabel" for="question">رسالتك</label>

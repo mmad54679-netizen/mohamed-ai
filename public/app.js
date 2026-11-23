@@ -21,6 +21,7 @@ const RESPONSE_STYLE_KEY = 'mohamedAiResponseStyle';
 const FEEDBACK_KEY = 'mohamedAiFeedback';
 const TASK_MODE_KEY = 'mohamedAiTaskMode';
 const AGENT_PERMISSIONS_KEY = 'mohamedAiAgentPermissions';
+const OPENMANUS_KEY = 'mohamedAiUseOpenManus';
 const DEFAULT_AGENT_PERMISSIONS = ['planning', 'image_analysis', 'code_help', 'calculator', 'date_time'];
 let taskMode = ['task', 'agent'].includes(localStorage.getItem(TASK_MODE_KEY)) ? localStorage.getItem(TASK_MODE_KEY) : 'chat';
 let responseStyle = localStorage.getItem(RESPONSE_STYLE_KEY) || 'balanced';
@@ -46,7 +47,10 @@ function applyAssistantMode() {
   $('question').placeholder = isQureo ? 'اكتب سؤال JavaScript أو Python أو قلّي الجزء غير الواضح…' : 'اكتب سؤالك أو اطلب مني مهمة…';
   $('disclaimer').textContent = isQureo ? 'المحادثة تشرح فقط ولا تضغط الإجابة على QUREO. التشغيل الآلي محصور بالأنواع المدعومة.' : 'لا تضع كلمات المرور أو البيانات الحساسة في المحادثة.';
   $('chatHeading').textContent = isQureo ? 'محادثة QUREO' : 'المحادثة';
+  $('welcomeLabel').textContent = isQureo ? 'مساعد QUREO' : 'Mohamed AI';
+  $('welcomeText').textContent = isQureo ? 'اسألني عن سؤال JavaScript أو Python، أو ارفع صورته. سأشرح لك وأطلب توضيحًا إذا التبس السؤال.' : 'اسألني عن أي موضوع؛ أقدر أساعدك في الشرح والكتابة والبرمجة والتخطيط.';
   $('agentPermissions').style.display = taskMode === 'agent' && !isQureo ? 'block' : 'none';
+  $('enginePicker').style.display = isQureo ? 'none' : 'block';
 }
 
 const LOCAL_SKILLS = [
@@ -112,6 +116,12 @@ refreshSkills();
 $('appPassword').addEventListener('change', refreshSkills);
 modeInputs.forEach(input => input.addEventListener('change', () => { assistantMode = input.value; localStorage.setItem(ASSISTANT_MODE_KEY, assistantMode); applyAssistantMode(); }));
 applyAssistantMode();
+const openManusToggle = $('openManusToggle');
+openManusToggle.checked = localStorage.getItem(OPENMANUS_KEY) === 'yes';
+openManusToggle.addEventListener('change', () => {
+  localStorage.setItem(OPENMANUS_KEY, openManusToggle.checked ? 'yes' : 'no');
+  if (openManusToggle.checked && imageData) setStatus('OpenManus في هذا الإصدار يقبل النص فقط؛ أزل الصورة أو أوقف الخيار.', true);
+});
 $('clearPassword').addEventListener('click', () => { $('appPassword').value = ''; });
 const taskModeInput = $('taskMode');
 taskModeInput.value = taskMode;
@@ -215,15 +225,15 @@ $('clearSolutionLibraryBtn').addEventListener('click', () => {
 });
 if (ANDROID_NATIVE) refreshSolutionLibraryCount();
 
-function solveEndpoint() {
+function solveEndpoint(useOpenManus = false) {
   const base = $('serverBaseUrl')?.value.trim() || '';
-  if (!base) return ANDROID_NATIVE ? null : '/api/solve';
+  if (!base) return ANDROID_NATIVE ? null : (useOpenManus ? '/api/openmanus' : '/api/solve');
   let parsed;
   try { parsed = new URL(base); } catch { throw new Error('أدخل عنوانًا صحيحًا يبدأ بـ https://.'); }
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
     throw new Error('استخدم عنوان خادم HTTPS فقط، من دون مسار أو بيانات دخول داخل الرابط.');
   }
-  return `${parsed.origin}/api/solve`;
+  return `${parsed.origin}${useOpenManus ? '/api/openmanus' : '/api/solve'}`;
 }
 
 function setStatus(text, isError = false) {
@@ -543,17 +553,19 @@ async function runTask(task) {
   rememberChatEntry('user', userMessage);
 
   let cloudFailure = '';
-  setStatus(ANDROID_NATIVE && !$('serverBaseUrl').value.trim()
+  const useOpenManus = assistantMode === 'general' && openManusToggle.checked;
+  setStatus(useOpenManus ? 'أرسل الطلب إلى خدمة OpenManus على خادمك…' : (ANDROID_NATIVE && !$('serverBaseUrl').value.trim()
     ? 'لم يُضبط خادم سحابي؛ سأجرّب النموذج المحلي إن كان جاهزًا…'
-    : 'أحاول Gemini ثم Groq بالتتابع…');
+    : 'أحاول مزوّد Mohamed AI السحابي…'));
   try {
-    const endpoint = solveEndpoint();
+    if (useOpenManus && image) throw new Error('OpenManus هنا يدعم النص فقط؛ أزل الصورة أو أوقف اختيار OpenManus.');
+    const endpoint = solveEndpoint(useOpenManus);
     if (!endpoint) throw new Error('لم يُضبط عنوان خادم سحابي.');
     const headers = { 'Content-Type': 'application/json' };
     const password = $('appPassword').value.trim();
     if (password) headers.Authorization = `Bearer ${password}`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 85000);
+    const timer = setTimeout(() => controller.abort(), useOpenManus ? 110000 : 85000);
     let response;
     try {
       response = await fetch(endpoint, {
@@ -566,7 +578,7 @@ async function runTask(task) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'تعذّر الحل السحابي.');
     await removeTask();
-    const providerNames = { gemini: 'Gemini', groq: 'Groq', mock: 'وضع المعاينة' };
+    const providerNames = { gemini: 'Gemini', groq: 'Groq', mock: 'وضع المعاينة', openmanus: 'OpenManus' };
     const provider = providerNames[result.provider] || 'السحابة';
     setAnswer(result.answer || 'لم يصل شرح من النموذج.', `المعالجة عبر ${provider}${result.fallbackUsed ? ' بعد تعذّر المزود الأساسي' : ''}.`);
     setStatus('جهزت الإجابة المقترحة. راجع الشرح واختر بنفسك على QUREO.');

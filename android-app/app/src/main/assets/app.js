@@ -14,6 +14,18 @@ const DB_KEY = 'active-task';
 const LOCAL_PREPARED_KEY = 'qureoLocalModelPrepared';
 const SERVER_BASE_KEY = 'qureoPrivateServerBaseUrl';
 const DEFAULT_WORKER_URL = 'https://qureo-helper.qureo-helper.workers.dev';
+const ASSISTANT_MODE_KEY = 'mohamedAiAssistantMode';
+const REMEMBER_CHAT_KEY = 'mohamedAiRememberChat';
+const CHAT_MEMORY_KEY = 'mohamedAiChatMemory';
+const RESPONSE_STYLE_KEY = 'mohamedAiResponseStyle';
+const FEEDBACK_KEY = 'mohamedAiFeedback';
+const TASK_MODE_KEY = 'mohamedAiTaskMode';
+const AGENT_PERMISSIONS_KEY = 'mohamedAiAgentPermissions';
+const OPENMANUS_KEY = 'mohamedAiUseOpenManus';
+const DEFAULT_AGENT_PERMISSIONS = ['planning', 'image_analysis', 'code_help', 'calculator', 'date_time'];
+let taskMode = ['task', 'agent'].includes(localStorage.getItem(TASK_MODE_KEY)) ? localStorage.getItem(TASK_MODE_KEY) : 'chat';
+let responseStyle = localStorage.getItem(RESPONSE_STYLE_KEY) || 'balanced';
+let assistantMode = localStorage.getItem(ASSISTANT_MODE_KEY) === 'qureo' ? 'qureo' : 'general';
 const ANDROID_NATIVE = new URLSearchParams(window.location.search).get('native') === '1';
 let imageData = '';
 const imageLoadGuard = window.QureoImageLoadGuard();
@@ -21,10 +33,151 @@ let installPrompt = null;
 let dbPromise;
 
 $('appPassword').value = '';
+const modeInputs = [...document.querySelectorAll('input[name=assistantMode]')];
+function applyAssistantMode() {
+  const isQureo = assistantMode === 'qureo';
+  modeInputs.forEach(input => { input.checked = input.value === assistantMode; });
+  $('qureoAutoCard').style.display = isQureo && ANDROID_NATIVE ? 'block' : 'none';
+  $('solutionLibraryCard').style.display = isQureo && ANDROID_NATIVE ? 'block' : 'none';
+  $('modePill').textContent = isQureo ? 'وضع QUREO' : 'مساعد عام';
+  $('introTitle').textContent = isQureo ? 'أهلًا، أنا مساعد QUREO الآمن.' : 'أهلًا، أنا Mohamed AI.';
+  $('introText').textContent = isQureo ? 'أرسل سؤال JavaScript أو Python أو صورة له. سأشرح لك، ولن أضغط إجابة إلا داخل الأنواع المدعومة وبعد تحقق محلي واضح.' : 'اسألني بالعربي عن الدراسة، البرمجة، الكتابة، الترجمة، التخطيط أو أي موضوع عام. أشرح بوضوح وأقول لك عندما لا أستطيع التحقق من معلومة.';
+  $('introLimit').textContent = isQureo ? 'لا أخمّن — إذا كان السؤال ملتبسًا أتوقف' : 'لا أختلق المعلومات — اطلب مصادر أو تحقق من الأمور المهمة';
+  $('questionLabel').textContent = isQureo ? 'سؤالك عن QUREO' : 'رسالتك';
+  $('question').placeholder = isQureo ? 'اكتب سؤال JavaScript أو Python أو قلّي الجزء غير الواضح…' : 'اكتب سؤالك أو اطلب مني مهمة…';
+  $('disclaimer').textContent = isQureo ? 'المحادثة تشرح فقط ولا تضغط الإجابة على QUREO. التشغيل الآلي محصور بالأنواع المدعومة.' : 'لا تضع كلمات المرور أو البيانات الحساسة في المحادثة.';
+  $('chatHeading').textContent = isQureo ? 'محادثة QUREO' : 'المحادثة';
+  $('welcomeLabel').textContent = isQureo ? 'مساعد QUREO' : 'Mohamed AI';
+  $('welcomeText').textContent = isQureo ? 'اسألني عن سؤال JavaScript أو Python، أو ارفع صورته. سأشرح لك وأطلب توضيحًا إذا التبس السؤال.' : 'اسألني عن أي موضوع؛ أقدر أساعدك في الشرح والكتابة والبرمجة والتخطيط.';
+  $('agentPermissions').style.display = taskMode === 'agent' && !isQureo ? 'block' : 'none';
+  $('enginePicker').style.display = isQureo ? 'none' : 'block';
+}
+
+const LOCAL_SKILLS = [
+  ['conversation', 'المحادثة العامة', 'أساسي', 'إجابة عربية دقيقة ومنظمة.'],
+  ['writing', 'الكتابة والتحرير', 'محتوى', 'صياغة ورسائل وإعادة كتابة.'],
+  ['translation', 'الترجمة', 'لغة', 'ترجمة تحافظ على المعنى والنبرة.'],
+  ['summarization', 'التلخيص والاستخراج', 'محتوى', 'تلخيص واستخراج النقاط المهمة.'],
+  ['tutoring', 'التعليم والشرح', 'تعليم', 'شرح خطوة بخطوة ومراجعة.'],
+  ['coding', 'البرمجة ومراجعة الكود', 'برمجة', 'شرح وكتابة وتصحيح الكود.'],
+  ['safe_calculator', 'الحساب الآمن', 'أدوات محلية', 'عمليات رياضية دون تنفيذ كود.'],
+  ['date_time', 'الوقت والتاريخ', 'أدوات محلية', 'قراءة الوقت بصيغة UTC.'],
+  ['planning', 'التخطيط والمهام', 'وكيل', 'خطة قصيرة وتحديد الموافقات.'],
+  ['image_analysis', 'تحليل الصور', 'وسائط', 'يعتمد على مزود النموذج.'],
+  ['voice_input', 'الإدخال الصوتي العربي', 'جهاز', 'تحويل الكلام إلى نص محليًا.'],
+  ['speech_output', 'قراءة الرد بصوت عربي', 'جهاز', 'نطق آخر إجابة محليًا.'],
+  ['local_inference', 'المعالجة المحلية', 'خصوصية', 'اختيارية بعد تنزيل النموذج.'],
+  ['github_read', 'قراءة GitHub', 'تكاملات', 'قراءة فقط للمستودعات والملفات.'],
+  ['drive_read', 'قراءة Google Drive', 'تكاملات', 'PDF وWord وGoogle Docs.'],
+  ['gmail_read', 'قراءة Gmail', 'تكاملات', 'بحث وmetadata فقط.'],
+  ['calendar_read', 'قراءة Google Calendar', 'تكاملات', 'عرض الأحداث فقط.'],
+  ['web_search', 'البحث في الويب', 'بحث', 'مصادر وروابط ومقتطفات قراءة فقط.'],
+  ['qureo_safe', 'مساعد QUREO الآمن', 'تعليم', 'تشغيل محدود بعد التحقق.'],
+  ['export_share', 'التصدير والمشاركة', 'إنتاجية', 'بعد طلب المستخدم من الجهاز.'],
+];
+function skillStateLabel(state) {
+  return { available: 'متاحة', configured: 'مهيأة', needs_setup: 'إعداد مطلوب', optional: 'اختيارية', disabled: 'متوقفة' }[state] || 'متاحة';
+}
+function renderSkills(skills = LOCAL_SKILLS.map(([id, name, category, description]) => ({ id, name, category, description, state: ['github_read', 'drive_read', 'gmail_read', 'calendar_read', 'web_search', 'image_analysis'].includes(id) ? 'needs_setup' : (id === 'local_inference' ? 'optional' : 'available') }))) {
+  const grid = $('skillsGrid');
+  if (!grid) return;
+  grid.replaceChildren();
+  skills.forEach(skill => {
+    const item = document.createElement('article');
+    item.className = 'skill-item';
+    const name = document.createElement('div');
+    name.className = 'skill-name';
+    name.append(document.createTextNode(`${skill.name} · ${skill.category || ''}`));
+    const state = document.createElement('span');
+    state.className = `skill-state ${skill.state || 'available'}`;
+    state.textContent = skillStateLabel(skill.state);
+    name.append(state);
+    const description = document.createElement('div');
+    description.className = 'skill-desc';
+    description.textContent = skill.description || skill.reason || '';
+    item.append(name, description);
+    grid.append(item);
+  });
+}
+async function refreshSkills() {
+  renderSkills();
+  try {
+    const headers = {};
+    const password = $('appPassword')?.value.trim();
+    if (password) headers.Authorization = `Bearer ${password}`;
+    const response = await fetch('/api/skills', { headers });
+    if (!response.ok) return;
+    const result = await response.json();
+    if (Array.isArray(result.skills)) renderSkills(result.skills);
+    $('skillsNote').textContent = 'الحالة محدثة من الخادم. القراءة هي الوضع الافتراضي؛ الإرسال والحذف والنشر ليستا مفعّلتين تلقائيًا.';
+  } catch {}
+}
+refreshSkills();
+$('appPassword').addEventListener('change', refreshSkills);
+modeInputs.forEach(input => input.addEventListener('change', () => { assistantMode = input.value; localStorage.setItem(ASSISTANT_MODE_KEY, assistantMode); applyAssistantMode(); }));
+applyAssistantMode();
+const openManusToggle = $('openManusToggle');
+openManusToggle.checked = localStorage.getItem(OPENMANUS_KEY) === 'yes';
+openManusToggle.addEventListener('change', () => {
+  localStorage.setItem(OPENMANUS_KEY, openManusToggle.checked ? 'yes' : 'no');
+  if (openManusToggle.checked && imageData) setStatus('OpenManus في هذا الإصدار يقبل النص فقط؛ أزل الصورة أو أوقف الخيار.', true);
+});
 $('clearPassword').addEventListener('click', () => { $('appPassword').value = ''; });
+const taskModeInput = $('taskMode');
+taskModeInput.value = taskMode;
+taskModeInput.addEventListener('change', () => { taskMode = taskModeInput.value; localStorage.setItem(TASK_MODE_KEY, taskMode); $('agentPermissions').style.display = taskMode === 'agent' && assistantMode !== 'qureo' ? 'block' : 'none'; });
+const agentPermissionInputs = [...document.querySelectorAll('input[name=agentPermission]')];
+let agentPermissions = (() => { try { const saved = JSON.parse(localStorage.getItem(AGENT_PERMISSIONS_KEY) || 'null'); return Array.isArray(saved) ? saved : DEFAULT_AGENT_PERMISSIONS; } catch { return DEFAULT_AGENT_PERMISSIONS; } })();
+agentPermissionInputs.forEach(input => {
+  input.checked = agentPermissions.includes(input.value);
+  input.addEventListener('change', () => {
+    agentPermissions = agentPermissionInputs.filter(item => item.checked).map(item => item.value);
+    localStorage.setItem(AGENT_PERMISSIONS_KEY, JSON.stringify(agentPermissions));
+  });
+});
+const responseStyleInput = $('responseStyle');
+if (!['balanced', 'concise', 'detailed', 'steps'].includes(responseStyle)) responseStyle = 'balanced';
+responseStyleInput.value = responseStyle;
+responseStyleInput.addEventListener('change', () => { responseStyle = responseStyleInput.value; localStorage.setItem(RESPONSE_STYLE_KEY, responseStyle); });
+const rememberChatToggle = $('rememberChatToggle');
+rememberChatToggle.checked = localStorage.getItem(REMEMBER_CHAT_KEY) === 'yes';
+rememberChatToggle.addEventListener('change', () => {
+  localStorage.setItem(REMEMBER_CHAT_KEY, rememberChatToggle.checked ? 'yes' : 'no');
+  if (!rememberChatToggle.checked) localStorage.removeItem(CHAT_MEMORY_KEY);
+});
+function persistChatMemory() {
+  if (!rememberChatToggle.checked) return;
+  try { localStorage.setItem(CHAT_MEMORY_KEY, JSON.stringify(chatHistory.slice(-20))); } catch {}
+}
+function restoreChatMemory() {
+  if (!rememberChatToggle.checked) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHAT_MEMORY_KEY) || '[]');
+    if (!Array.isArray(saved)) return;
+    saved.filter(item => ['user', 'assistant'].includes(item?.role) && item?.text).forEach(item => {
+      appendChatMessage(item.role, item.text, false);
+      chatHistory.push({ role: item.role, text: String(item.text).slice(0, 1800) });
+    });
+  } catch {}
+}
+function clearChat() {
+  chatHistory.length = 0;
+  latestAssistantAnswer = '';
+  localStorage.removeItem(CHAT_MEMORY_KEY);
+  chatTranscript.querySelectorAll('.bubble, .answer-card').forEach(node => node.remove());
+  appendChatMessage('assistant', 'تم مسح المحادثة. أنا جاهز لسؤالك الجديد.', false);
+}
+function exportChat() {
+  const lines = chatHistory.map(item => `${item.role === 'user' ? 'أنت' : 'Mohamed AI'}: ${item.text}`);
+  if (!lines.length) { setStatus('لا توجد محادثة لتصديرها.', true); return; }
+  const blob = new Blob([lines.join('\n\n')], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a'); link.href = url; link.download = 'mohamed-ai-chat.txt'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$('clearChatBtn').addEventListener('click', clearChat);
+$('exportChatBtn').addEventListener('click', exportChat);
 if (ANDROID_NATIVE) {
-  $('qureoAutoCard').style.display = 'block';
-  $('solutionLibraryCard').style.display = 'block';
   $('serverBox').style.display = 'block';
   $('serverBaseUrl').value = localStorage.getItem(SERVER_BASE_KEY) || DEFAULT_WORKER_URL;
   $('serverBaseUrl').addEventListener('input', () => localStorage.setItem(SERVER_BASE_KEY, $('serverBaseUrl').value.trim()));
@@ -72,15 +225,15 @@ $('clearSolutionLibraryBtn').addEventListener('click', () => {
 });
 if (ANDROID_NATIVE) refreshSolutionLibraryCount();
 
-function solveEndpoint() {
+function solveEndpoint(useOpenManus = false) {
   const base = $('serverBaseUrl')?.value.trim() || '';
-  if (!base) return ANDROID_NATIVE ? null : '/api/solve';
+  if (!base) return ANDROID_NATIVE ? null : (useOpenManus ? '/api/openmanus' : '/api/solve');
   let parsed;
   try { parsed = new URL(base); } catch { throw new Error('أدخل عنوانًا صحيحًا يبدأ بـ https://.'); }
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
     throw new Error('استخدم عنوان خادم HTTPS فقط، من دون مسار أو بيانات دخول داخل الرابط.');
   }
-  return `${parsed.origin}/api/solve`;
+  return `${parsed.origin}${useOpenManus ? '/api/openmanus' : '/api/solve'}`;
 }
 
 function setStatus(text, isError = false) {
@@ -216,6 +369,45 @@ function loadImage(file) {
 imageInput.addEventListener('change', () => loadImage(imageInput.files?.[0]));
 $('removeImage').addEventListener('click', clearImage);
 
+const voiceBtn = $('voiceBtn');
+const speakBtn = $('speakBtn');
+const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+if (SpeechRecognitionApi) {
+  recognition = new SpeechRecognitionApi();
+  recognition.lang = 'ar-SA';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.onstart = () => { listening = true; voiceBtn.classList.add('listening'); voiceBtn.textContent = 'إيقاف الاستماع'; setStatus('تحدث الآن بالعربية…'); };
+  recognition.onend = () => { listening = false; voiceBtn.classList.remove('listening'); voiceBtn.textContent = 'تحدث بالميكروفون'; };
+  recognition.onerror = event => { listening = false; voiceBtn.classList.remove('listening'); voiceBtn.textContent = 'تحدث بالميكروفون'; setStatus(event.error === 'not-allowed' ? 'لم تُمنح صلاحية الميكروفون.' : 'تعذّر فهم الصوت؛ جرّب مرة أخرى.', true); };
+  recognition.onresult = event => {
+    const parts = [];
+    for (let i = event.resultIndex; i < event.results.length; i += 1) parts.push(event.results[i][0].transcript);
+    question.value = parts.join(' ').trim();
+  };
+  voiceBtn.addEventListener('click', () => { if (listening) recognition.stop(); else { try { recognition.start(); } catch {} } });
+} else {
+  voiceBtn.disabled = true;
+  voiceBtn.title = 'الميكروفون غير مدعوم في هذا المتصفح أو WebView.';
+}
+if ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) {
+  speakBtn.addEventListener('click', () => {
+    const text = latestAssistantAnswer || answerText.textContent;
+    if (!text.trim()) { setStatus('لا توجد إجابة لقراءتها.', true); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ar-SA';
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+    setStatus('أقرأ آخر إجابة بصوت عربي على الجهاز.');
+  });
+} else {
+  speakBtn.disabled = true;
+  speakBtn.title = 'النطق غير مدعوم في هذا المتصفح أو WebView.';
+}
+
 function updateLocalInfo(text) {
   $('localStatus').textContent = text;
 }
@@ -232,16 +424,27 @@ function setAnswer(text, source) {
   card.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
   card.querySelector('.answer-text').textContent = text;
   card.querySelector('.answer-source').textContent = source;
-  const copyButton = card.querySelector('.answer-tools button:first-child');
-  const shareButton = card.querySelector('.answer-tools button:last-child');
+  const toolButtons = [...card.querySelectorAll('.answer-tools button')];
+  const copyButton = toolButtons[0];
+  const shareButton = toolButtons[1];
+  const feedbackButtons = toolButtons.slice(2);
   copyButton.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(text); copyButton.textContent = 'تم النسخ'; setTimeout(() => { copyButton.textContent = 'نسخ'; }, 1600); }
     catch { setStatus('تعذّر النسخ؛ حدّد الشرح وانسخه يدويًا.', true); }
   });
   shareButton.addEventListener('click', async () => {
-    if (navigator.share) { try { await navigator.share({ title: 'شرح سؤال QUREO', text }); } catch {} }
+    if (navigator.share) { try { await navigator.share({ title: assistantMode === 'qureo' ? 'شرح سؤال QUREO' : 'Mohamed AI', text }); } catch {} }
     else { try { await navigator.clipboard.writeText(text); setStatus('نُسخ الشرح؛ يمكنك لصقه في التطبيق الذي تريده.'); } catch { setStatus('المشاركة غير متاحة على هذا المتصفح.', true); } }
   });
+  feedbackButtons.forEach(button => button.addEventListener('click', () => {
+    let feedback = { positive: 0, negative: 0 };
+    try { feedback = { ...feedback, ...JSON.parse(localStorage.getItem(FEEDBACK_KEY) || '{}') }; } catch {}
+    const kind = button.dataset.feedback;
+    feedback[kind] = Number(feedback[kind] || 0) + 1;
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify(feedback));
+    feedbackButtons.forEach(item => { item.disabled = true; item.style.opacity = '.55'; });
+    setStatus(kind === 'positive' ? 'شكرًا، سجّلت أن الإجابة مفيدة.' : 'سجّلت أن الإجابة تحتاج تحسينًا. لا يتم إرسال نص المحادثة.');
+  }));
   chatTranscript.appendChild(card);
   rememberChatEntry('assistant', text);
   chatTranscript.scrollTop = chatTranscript.scrollHeight;
@@ -252,17 +455,19 @@ const chatHistory = [];
 
 function rememberChatEntry(role, text) {
   chatHistory.push({ role, text: String(text || '').slice(0, 1800) });
-  if (chatHistory.length > 8) chatHistory.splice(0, chatHistory.length - 8);
+  if (chatHistory.length > 20) chatHistory.splice(0, chatHistory.length - 20);
+  persistChatMemory();
 }
 
-function appendChatMessage(role, text) {
+function appendChatMessage(role, text, remember = false) {
   const bubble = document.createElement('div');
   bubble.className = `bubble ${role}`;
   const label = document.createElement('span');
   label.className = 'bubble-label';
-  label.textContent = role === 'user' ? 'أنت' : 'مساعد QUREO';
+  label.textContent = role === 'user' ? 'أنت' : 'Mohamed AI';
   bubble.append(label, document.createTextNode(String(text || '')));
   chatTranscript.appendChild(bubble);
+  if (remember) rememberChatEntry(role, text);
   chatTranscript.scrollTop = chatTranscript.scrollHeight;
 }
 
@@ -272,7 +477,7 @@ function questionWithConversation(questionText, image) {
   const remaining = Math.max(0, 11200 - current.length);
   if (!remaining) return current;
   const context = chatHistory.slice(-4).map(item => `${item.role === 'user' ? 'الطالب' : 'المساعد'}: ${item.text}`).join('\n');
-  const header = '\n\nسياق مختصر من محادثة أسئلة QUREO السابقة:\n';
+  const header = assistantMode === 'qureo' ? '\n\nسياق مختصر من محادثة أسئلة QUREO السابقة:\n' : '\n\nسياق مختصر من المحادثة السابقة:\n';
   return `${current}${header}${context.slice(-remaining)}`;
 }
 
@@ -343,35 +548,37 @@ async function runTask(task) {
     finishRun();
     return;
   }
-  const userMessage = text || 'أرفقت صورة لسؤال QUREO.';
+  const userMessage = text || (assistantMode === 'qureo' ? 'أرفقت صورة لسؤال QUREO.' : 'أرفقت صورة للتحليل.');
   appendChatMessage('user', userMessage);
   rememberChatEntry('user', userMessage);
 
   let cloudFailure = '';
-  setStatus(ANDROID_NATIVE && !$('serverBaseUrl').value.trim()
+  const useOpenManus = assistantMode === 'general' && openManusToggle.checked;
+  setStatus(useOpenManus ? 'أرسل الطلب إلى خدمة OpenManus على خادمك…' : (ANDROID_NATIVE && !$('serverBaseUrl').value.trim()
     ? 'لم يُضبط خادم سحابي؛ سأجرّب النموذج المحلي إن كان جاهزًا…'
-    : 'أحاول Gemini ثم Groq بالتتابع…');
+    : 'أحاول مزوّد Mohamed AI السحابي…'));
   try {
-    const endpoint = solveEndpoint();
+    if (useOpenManus && image) throw new Error('OpenManus هنا يدعم النص فقط؛ أزل الصورة أو أوقف اختيار OpenManus.');
+    const endpoint = solveEndpoint(useOpenManus);
     if (!endpoint) throw new Error('لم يُضبط عنوان خادم سحابي.');
     const headers = { 'Content-Type': 'application/json' };
     const password = $('appPassword').value.trim();
     if (password) headers.Authorization = `Bearer ${password}`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 85000);
+    const timer = setTimeout(() => controller.abort(), useOpenManus ? 110000 : 85000);
     let response;
     try {
       response = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ question: requestQuestion, image }),
+        body: JSON.stringify({ question: requestQuestion, image, mode: assistantMode, responseStyle, taskMode, agentPermissions }),
         signal: controller.signal,
       });
     } finally { clearTimeout(timer); }
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'تعذّر الحل السحابي.');
     await removeTask();
-    const providerNames = { gemini: 'Gemini', groq: 'Groq', mock: 'وضع المعاينة' };
+    const providerNames = { gemini: 'Gemini', groq: 'Groq', mock: 'وضع المعاينة', openmanus: 'OpenManus' };
     const provider = providerNames[result.provider] || 'السحابة';
     setAnswer(result.answer || 'لم يصل شرح من النموذج.', `المعالجة عبر ${provider}${result.fallbackUsed ? ' بعد تعذّر المزود الأساسي' : ''}.`);
     setStatus('جهزت الإجابة المقترحة. راجع الشرح واختر بنفسك على QUREO.');
@@ -405,7 +612,7 @@ async function runTask(task) {
   const stillSaved = await loadTask();
   showSavedTask(stillSaved || saved);
   setStatus(`${cloudFailure} بقيت المهمة محفوظة على الهاتف؛ اضغط «استئناف المهمة المحفوظة» بعد تجهيز النموذج أو عودة الاتصال.`, true);
-  const waitingReply = `ما قدرت أجهز الحل الآن. ${cloudFailure} حفظت السؤال على الهاتف لتقدر تستأنفه لاحقًا.`;
+  const waitingReply = `ما قدرت أجهز الرد الآن. ${cloudFailure} حفظت السؤال على الهاتف لتقدر تستأنفه لاحقًا.`;
   appendChatMessage('assistant', waitingReply);
   rememberChatEntry('assistant', waitingReply);
   finishRun();
@@ -418,7 +625,7 @@ $('copyBtn').addEventListener('click', async () => {
 });
 $('shareBtn').addEventListener('click', async () => {
   const text = latestAssistantAnswer || answerText.textContent;
-  if (navigator.share) { try { await navigator.share({ title: 'شرح سؤال QUREO', text }); } catch {} }
+  if (navigator.share) { try { await navigator.share({ title: assistantMode === 'qureo' ? 'شرح سؤال QUREO' : 'Mohamed AI', text }); } catch {} }
   else { try { await navigator.clipboard.writeText(text); setStatus('نُسخ الشرح؛ يمكنك لصقه في التطبيق الذي تريده.'); } catch { setStatus('المشاركة غير متاحة على هذا المتصفح.', true); } }
 });
 
@@ -434,6 +641,7 @@ $('installBtn').addEventListener('click', async () => { if (!installPrompt) retu
   } else {
     updateLocalInfo('اختياري: تنزيل أولي بحجم مئات الميغابايت، ثم يمكن محاولة معالجة النص على الهاتف. استخدم Wi‑Fi إن أمكن.');
   }
+  restoreChatMemory();
   const saved = await loadTask();
   if (saved) {
     showSavedTask(saved);

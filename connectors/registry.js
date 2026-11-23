@@ -12,7 +12,7 @@ function connectorStatus(env = process.env) {
     id: item.id,
     name: item.name,
     category: item.category,
-    readOnly: item.readOnly,
+    readOnly: item.id === 'github' ? env.GITHUB_WRITE !== '1' : item.readOnly,
     scopes: item.scopes,
     available: item.id === 'microphone' ? true : Boolean(item.env && env[item.env]),
     configuredBy: item.id === 'microphone' ? 'browser-permission' : (item.env ? `server:${item.env}` : null),

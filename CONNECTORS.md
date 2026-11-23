@@ -14,3 +14,13 @@ Mohamed AI uses an allowlisted connector registry. A connector is not considered
 Never put OAuth access tokens, API keys, or passwords in the Android app or Git repository. Configure them on the private server and expose only the minimum connector scopes. Permanent deletion is not a supported agent action; destructive operations must be replaced with trash/archive and explicit confirmation.
 
 The registry reports availability only. It does not grant permission to send, delete, purchase, publish, or modify external data.
+
+## GitHub: ربط مباشر داخل المحادثة (1.7)
+
+- **القراءة التلقائية:** أي رابط `https://github.com/owner/repo` (أو ملف `/blob/branch/path`) داخل السؤال يجلب الخادم منه الوصف وREADME وقائمة الملفات (أو محتوى الملف) ويضيفها كمرجع للنموذج مع المصدر. أرسل `useGithub: false` لتعطيل ذلك. حد أقصى 3 روابط للرسالة، والمحتوى يُعامل كبيانات وليس تعليمات.
+- **المستودعات الخاصة:** `GITHUB_TOKEN` يُستخدم فقط مع الملاك المذكورين في `GITHUB_ALLOWED_OWNERS` (مفصولين بفواصل). أي مالك آخر يُقرأ كمستودع عام بدون رمز، فلا يتسرب وصولك الخاص لباقي المستخدمين.
+- **الكتابة (مغلقة افتراضيًا):** تتطلب `GITHUB_WRITE=1` وأن يكون المالك في القائمة وأن يرسل الطلب `confirm: true`:
+  - `POST /api/connectors/github/issue` بجسم `{ "repo": "owner/repo", "title": "...", "body": "...", "confirm": true }`
+  - `POST /api/connectors/github/comment` بجسم `{ "repo": "owner/repo", "number": 12, "body": "...", "confirm": true }`
+- استخدم رمزًا دقيق الصلاحيات (Fine-grained) على المستودعات المطلوبة فقط: قراءة المحتوى، وللكتابة صلاحية Issues فقط.
+- الدفع (commit/PR) غير مدعوم عمدًا في هذا الإصدار.

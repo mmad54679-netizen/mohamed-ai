@@ -5,9 +5,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#2459d3">
-  <meta name="description" content="مساعد محادثة عربي لحل أسئلة QUREO فقط">
+  <meta name="description" content="Mohamed AI — مساعد عربي عام مع وضع QUREO آمن">
   <link rel="manifest" href="./manifest.json">
-  <title>مساعد QUREO</title>
+  <title>Mohamed AI</title>
   <style>
     :root{color-scheme:light;--ink:#17233d;--muted:#69758b;--blue:#2459d3;--blue-dark:#1949bd;--blue-soft:#edf3ff;--line:#e2e7f0;--paper:#fff;--bg:#f4f6fb;--green:#167453;--red:#ad3c3c;--shadow:0 12px 36px rgba(26,44,83,.08)}
     *{box-sizing:border-box}
@@ -75,6 +75,9 @@
     .upload:active{background:#eef3ff}
     .upload span:first-child{font-size:17px}
     input[type=file]{display:none}
+    .voice-row{display:flex;gap:8px;margin-top:9px}
+    .voice-row button{flex:1}
+    .voice-btn.listening{background:#ffecec;border-color:#e5a3a3;color:#a52d2d}
     .send-btn{margin-inline-start:auto;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:9px 15px;min-height:42px;font-weight:800;cursor:pointer}
     .send-btn:disabled{opacity:.55;cursor:wait}
     .preview-wrap{display:none;position:relative;margin-top:10px}
@@ -100,6 +103,21 @@
     .saved-actions{display:flex;gap:8px;margin-top:9px}
     .saved-actions button{flex:1}
     .tools-card{display:none}
+    .skills-card{padding:0;overflow:hidden}
+    .skills-details{padding:14px 16px}
+    .skills-summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:800;list-style:none}
+    .skills-summary::-webkit-details-marker{display:none}
+    .skills-summary:after{content:"＋";margin-inline-start:auto;color:#5574b0}
+    .skills-details[open] .skills-summary:after{content:"−"}
+    .skills-note{font-size:11px;color:var(--muted);margin:7px 0 10px}
+    .skills-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .skill-item{border:1px solid #e1e7f1;border-radius:11px;padding:9px;background:#fbfcff;min-width:0}
+    .skill-name{display:flex;align-items:flex-start;gap:5px;font-size:11px;font-weight:800;line-height:1.4}
+    .skill-state{margin-inline-start:auto;white-space:nowrap;border-radius:99px;padding:2px 5px;font-size:9px;background:#e8f5ef;color:var(--green)}
+    .skill-state.needs_setup{background:#fff5df;color:#95620b}
+    .skill-state.optional{background:#eef0f5;color:#66738a}
+    .skill-desc{font-size:10px;color:#66738a;line-height:1.45;margin-top:4px}
+    @media(max-width:430px){.skills-grid{grid-template-columns:1fr}}
     .cache-tools{display:flex;gap:8px;margin-top:9px}
     .cache-tools button{flex:1}
     .disclaimer{font-size:11px;color:#68748a;margin:8px 2px 0;line-height:1.55}
@@ -110,22 +128,67 @@
 <body>
   <main class="wrap">
     <header>
-      <div class="mark" aria-hidden="true">Q</div>
+      <div class="mark" aria-hidden="true">م</div>
       <div>
-        <h1>مساعد QUREO</h1>
-        <p class="subtitle">محادثة عربية لحل أسئلة QUREO فقط</p>
+        <h1>Mohamed AI</h1>
+        <p class="subtitle">مساعد عربي شامل مع أدوات تعليمية آمنة</p>
       </div>
       <button class="install" id="installBtn" type="button">تثبيت</button>
-      <span class="pill">QUREO فقط</span>
+      <span class="pill" id="modePill">مساعد عام</span>
     </header>
 
     <section class="card intro">
-      <div class="intro-icon" aria-hidden="true">Q</div>
+      <div class="intro-icon" aria-hidden="true">م</div>
       <div>
-        <strong>أهلًا، أنا مساعدك لحل QUREO بس.</strong>
-        <p>اختار JavaScript أو Python وسجّل دخولك؛ أفتح صفحة QUREO وأفحص السؤال. التشغيل الآلي محدود بأنواع وأسئلة وأزرار مدعومة، ومش مضمون لكل الدروس. لو وقفت عند سؤال، كمل معايا هنا بالعربي.</p>
-        <span class="limit">ما بخمّنش — لو السؤال ملتبس أقولك</span>
+        <strong id="introTitle">أهلًا، أنا Mohamed AI.</strong>
+        <p id="introText">اسألني بالعربي عن الدراسة، البرمجة، الكتابة، الترجمة، التخطيط أو أي موضوع عام. أراجع الإجابة قبل عرضها، وإذا لم أستطع التحقق من معلومة أقول ذلك بدل التخمين.</p>
+        <span class="limit" id="introLimit">أحافظ على الخصوصية ولا أطلب كلمات المرور داخل المحادثة</span>
       </div>
+    </section>
+
+
+    <section class="card" aria-labelledby="modeHeading">
+      <div class="section-head"><span class="step" aria-hidden="true">١</span><strong id="modeHeading">اختر طريقة المساعدة</strong></div>
+      <div class="track-options" role="radiogroup" aria-label="وضع المساعد">
+        <label class="track-option"><input type="radio" name="assistantMode" value="general" checked> مساعد عام</label>
+        <label class="track-option"><input type="radio" name="assistantMode" value="qureo"> QUREO</label>
+      </div>
+      <p class="note">الوضع العام يجيب عن الأسئلة المتنوعة. وضع AI Agent يخطط وينفذ الخطوات المسموح بها بعد موافقتك. وضع QUREO يفعّل أدوات الدراسة والتشغيل الآلي المحدود فقط داخل QUREO.</p>
+      <div id="enginePicker" style="margin-top:10px;padding:10px 11px;border:1px solid #dfe6f2;border-radius:12px;background:#f8faff">
+        <strong style="font-size:12px">محرك المساعد العام</strong>
+        <label class="cache-toggle"><input id="openManusToggle" type="checkbox"> OpenManus — وكيل عام اختياري (يتطلب تشغيل الخدمة على الخادم)</label>
+        <p class="note">عند تفعيله، يُرسل نص رسالتك إلى خدمة OpenManus المهيأة على خادمك. لا تُرسل الصورة في هذا الوضع بعد؛ أوقفه لتحليل الصور أو استخدم محرك Mohamed AI.</p>
+      </div>
+      <label class="label" for="taskMode">طريقة المساعدة</label>
+      <select id="taskMode" style="width:100%;border:1px solid #d8dfeb;border-radius:12px;padding:11px 12px;background:#fff;color:var(--ink);min-height:46px">
+        <option value="chat">محادثة وإجابة</option>
+        <option value="task">تنفيذ مهمة بخطة</option>
+        <option value="agent">AI Agent — وكيل ذكي</option>
+      </select>
+      <label class="label" for="responseStyle">أسلوب الرد</label>
+      <select id="responseStyle" style="width:100%;border:1px solid #d8dfeb;border-radius:12px;padding:11px 12px;background:#fff;color:var(--ink);min-height:46px">
+        <option value="balanced">متوازن وواضح</option>
+        <option value="concise">مختصر ومباشر</option>
+        <option value="detailed">مفصل وعميق</option>
+        <option value="steps">خطوة بخطوة</option>
+      </select>
+      <div id="agentPermissions" style="display:none;margin-top:10px;padding:10px 11px;border:1px solid #dfe6f2;border-radius:12px;background:#f8faff">
+        <strong style="font-size:12px">صلاحيات الوكيل</strong>
+        <label class="cache-toggle"><input type="checkbox" name="agentPermission" value="planning" checked> إنشاء خطط وقوائم مهام</label>
+        <label class="cache-toggle"><input type="checkbox" name="agentPermission" value="image_analysis" checked> تحليل الصور والملفات المرفقة</label>
+        <label class="cache-toggle"><input type="checkbox" name="agentPermission" value="code_help" checked> كتابة وشرح الكود</label>
+        <label class="cache-toggle"><input type="checkbox" name="agentPermission" value="calculator" checked> استخدام آلة حاسبة آمنة</label>
+        <label class="cache-toggle"><input type="checkbox" name="agentPermission" value="date_time" checked> قراءة الوقت والتاريخ الحاليين</label>
+        <p class="note">لا توجد صلاحيات إرسال أو شراء أو حذف أو نشر تلقائيًا. أي إجراء خارجي يحتاج أداة وموافقة صريحة.</p>
+      </div>
+    </section>
+
+    <section class="card skills-card" aria-labelledby="skillsHeading">
+      <details class="skills-details">
+        <summary class="skills-summary"><span aria-hidden="true">✦</span><span id="skillsHeading">المهارات والقدرات</span></summary>
+        <p class="skills-note" id="skillsNote">هذه خريطة صادقة لما يستطيع التطبيق فعله الآن. المهارات الخارجية لا تعمل إلا بعد إعدادها على الخادم.</p>
+        <div class="skills-grid" id="skillsGrid" aria-live="polite"></div>
+      </details>
     </section>
 
     <section class="card auto-card" id="qureoAutoCard" aria-labelledby="autoHeading">
@@ -133,7 +196,7 @@
         <span class="step" aria-hidden="true">١</span>
         <strong id="autoHeading">اربط حساب QUREO وابدأ الحل</strong>
       </div>
-      <p class="auto-note">بيانات الحساب تُستخدم لتسجيل الدخول إلى QUREO فقط، ولا تُرسل لمزوّد الذكاء الاصطناعي.</p>
+      <p class="auto-note">بيانات الحساب تُستخدم لتسجيل الدخول إلى QUREO فقط، ولا تُرسل لمزوّد الذكاء الاصطناعي. التشغيل الآلي محدود بأنواع وأسئلة وأزرار مدعومة، ولا يضمن إكمال كل الدروس. درجة الثقة أو التحقق النصي ليسا برهانًا على صحة الحل.</p>
       <label class="label" for="qureoUsername">اسم المستخدم أو كود الطالب</label>
       <input id="qureoUsername" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="اسم المستخدم في QUREO">
       <label class="label" for="qureoPassword">كلمة مرور QUREO</label>
@@ -179,18 +242,24 @@
     <section class="card chat-card" aria-labelledby="chatHeading">
       <div class="chat-heading">
         <span class="step" aria-hidden="true">٢</span>
-        <strong id="chatHeading">محادثة حل أسئلة QUREO</strong>
+        <strong id="chatHeading">المحادثة</strong>
         <span>بالعربي</span>
+        <button class="small-btn" id="exportChatBtn" type="button">تصدير</button>
+        <button class="small-btn" id="clearChatBtn" type="button">مسح</button>
       </div>
       <div class="chat-log" id="chatTranscript" aria-live="polite" aria-relevant="additions text">
-        <div class="bubble assistant"><span class="bubble-label">مساعد QUREO</span>اسألني عن سؤال من JavaScript أو Python، أو ارفع صورته. هشرح لك الحل، ولو احتجت توضيحًا كمل كلامك هنا. المحادثة دي مؤقتة داخل الجلسة، وسياق آخر ٤ رسائل ممكن يروح لخادم المساعد مع سؤالك عشان أفهم المتابعة.</div>
+        <div class="bubble assistant"><span class="bubble-label" id="welcomeLabel">Mohamed AI</span><span id="welcomeText">اسألني عن أي موضوع؛ أقدر أساعدك في الشرح والكتابة والبرمجة والتخطيط.</span></div>
       </div>
       <div class="composer">
-        <label class="label" id="questionLabel" for="question">سؤالك عن QUREO</label>
-        <textarea id="question" maxlength="12000" placeholder="اكتب السؤال أو قلّي إيه الجزء اللي مش واضح…"></textarea>
+        <label class="label" id="questionLabel" for="question">رسالتك</label>
+        <textarea id="question" maxlength="12000" placeholder="اكتب سؤالك أو اطلب مني مهمة…"></textarea>
         <div class="or" aria-hidden="true"></div>
         <label class="upload" for="imageInput"><span aria-hidden="true">▧</span><span>صوّر السؤال أو اختَر صورة</span></label>
         <input id="imageInput" type="file" accept="image/*" capture="environment">
+        <div class="voice-row">
+          <button class="small-btn" id="voiceBtn" type="button">تحدث بالميكروفون</button>
+          <button class="small-btn" id="speakBtn" type="button">اقرأ آخر رد</button>
+        </div>
         <div class="preview-wrap" id="previewWrap">
           <img class="preview" id="preview" alt="معاينة صورة السؤال">
           <button class="remove" id="removeImage" type="button" aria-label="إزالة الصورة">×</button>
@@ -202,13 +271,15 @@
             <div class="answer-tools">
               <button id="copyBtn" type="button">نسخ</button>
               <button id="shareBtn" type="button">مشاركة</button>
+              <button type="button" data-feedback="positive">مفيد</button>
+              <button type="button" data-feedback="negative">غير مفيد</button>
             </div>
           </div>
           <div class="answer-text" id="answerText"></div>
           <p class="answer-source" id="answerSource"></p>
         </div>
         <div class="composer-bottom">
-          <p class="disclaimer">المحادثة تشرح فقط ولا تضغط الإجابة على QUREO. الضغط التلقائي محصور بالأنواع المدعومة بعد فحص صفحة QUREO.</p>
+          <p class="disclaimer" id="disclaimer">لا أقدّم التخمين كحقيقة. تحقّق من المعلومات المهمة، ولا تضع كلمات المرور أو البيانات الحساسة في المحادثة.</p>
           <button class="send-btn" id="solveBtn" type="button">إرسال السؤال</button>
         </div>
         <p class="status" id="status" role="status" aria-live="polite"></p>
@@ -235,7 +306,7 @@
       </details>
     </section>
 
-    <footer>مساعد مستقل لحل QUREO. لا يضمن إكمال كل الدروس، ودرجة الثقة أو التحقق النصي ليسا برهانًا على الصحة. عند سؤال غير واضح، تحقق منه بنفسك. بيانات الدخول لا تُرسل إلا إلى صفحة QUREO، أما محتوى السؤال وسياق المحادثة المحدود فقد يُرسل إلى خادم المساعد عند استخدام السحابة.</footer>
+    <footer>Mohamed AI مساعد عام مع وضع QUREO اختياري. تحقّق من المعلومات المهمة بنفسك، ولا تشارك كلمات المرور أو البيانات الحساسة.</footer>
   </main>
   <script src="./local-inference.js" defer></script>
   <script src="./preflight.js" defer></script>
